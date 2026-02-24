@@ -90,8 +90,25 @@ export default function HomePage() {
   const [scannerStatus, setScannerStatus] = useState<string>("카메라를 준비합니다...");
   const scannerVideoRef = useRef<HTMLVideoElement | null>(null);
   const scannerStreamRef = useRef<MediaStream | null>(null);
+  const scannerControlsRef = useRef<{ stop: () => void } | null>(null);
 
   const isAdmin = authRole === "admin";
+
+  function stopScannerResources() {
+    if (scannerControlsRef.current) {
+      scannerControlsRef.current.stop();
+      scannerControlsRef.current = null;
+    }
+    if (scannerStreamRef.current) {
+      scannerStreamRef.current.getTracks().forEach((track) => track.stop());
+      scannerStreamRef.current = null;
+    }
+    const video = scannerVideoRef.current;
+    if (video?.srcObject && "getTracks" in video.srcObject) {
+      (video.srcObject as MediaStream).getTracks().forEach((track) => track.stop());
+      video.srcObject = null;
+    }
+  }
 
   async function readJsonOrText(res: Response) {
     const text = await res.text();
@@ -236,10 +253,7 @@ export default function HomePage() {
     if (!scannerOpen) {
       setScannerError(null);
       setScannerStatus("카메라를 준비합니다...");
-      if (scannerStreamRef.current) {
-        scannerStreamRef.current.getTracks().forEach((track) => track.stop());
-        scannerStreamRef.current = null;
-      }
+      stopScannerResources();
       return;
     }
 
@@ -248,61 +262,100 @@ export default function HomePage() {
 
     async function startScanner() {
       try {
-        const BarcodeDetectorCtor = (window as unknown as { BarcodeDetector?: new (opts?: { formats?: string[] }) => { detect: (source: ImageBitmapSource) => Promise<Array<{ rawValue?: string }>> } }).BarcodeDetector;
-        if (!navigator.mediaDevices?.getUserMedia) {
-          throw new Error("이 브라우저는 카메라 접근을 지원하지 않습니다.");
-        }
-        if (!BarcodeDetectorCtor) {
-          throw new Error("이 브라우저는 바코드 스캔을 지원하지 않습니다. Chrome 모바일/데스크톱 최신 버전을 사용하세요.");
-        }
-
-        const detector = new BarcodeDetectorCtor({
-          formats: ["code_128", "code_39", "ean_13", "ean_8", "upc_a", "upc_e", "qr_code"],
-        });
-
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: "environment" } },
-          audio: false,
-        });
-        if (cancelled) {
-          stream.getTracks().forEach((t) => t.stop());
-          return;
-        }
-        scannerStreamRef.current = stream;
-
         const video = scannerVideoRef.current;
         if (!video) {
           throw new Error("카메라 미리보기 초기화에 실패했습니다.");
         }
-        video.srcObject = stream;
-        await video.play();
-        setScannerStatus("바코드를 화면 중앙에 맞춰주세요.");
 
-        const scanLoop = async () => {
-          if (cancelled || !scannerOpen) return;
-          try {
-            const barcodes = await detector.detect(video);
-            if (barcodes.length > 0) {
-              const raw = (barcodes[0].rawValue || "").trim();
-              if (raw) {
-                const scanned = raw.toUpperCase();
-                if (scannerTarget === "tx") {
-                  setTxForm((v) => ({ ...v, itemNumber: scanned }));
-                } else {
-                  setPartForm((v) => ({ ...v, itemNumber: scanned }));
-                }
-                setScannerStatus(`인식됨: ${raw}`);
-                setTimeout(() => setScannerOpen(false), 200);
-                return;
-              }
-            }
-          } catch {
-            // ignore intermittent detection errors
+        const applyScannedValue = (raw: string) => {
+          const scanned = raw.toUpperCase();
+          if (scannerTarget === "tx") {
+            setTxForm((v) => ({ ...v, itemNumber: scanned }));
+          } else {
+            setPartForm((v) => ({ ...v, itemNumber: scanned }));
           }
-          rafId = window.requestAnimationFrame(scanLoop);
+          setScannerStatus(`인식됨: ${raw}`);
+          window.setTimeout(() => setScannerOpen(false), 200);
         };
 
-        rafId = window.requestAnimationFrame(scanLoop);
+        const BarcodeDetectorCtor = (window as unknown as {
+          BarcodeDetector?: new (opts?: { formats?: string[] }) => {
+            detect: (source: ImageBitmapSource) => Promise<Array<{ rawValue?: string }>>;
+          };
+        }).BarcodeDetector;
+        if (!navigator.mediaDevices?.getUserMedia) {
+          throw new Error("이 브라우저는 카메라 접근을 지원하지 않습니다.");
+        }
+
+        if (BarcodeDetectorCtor) {
+          const detector = new BarcodeDetectorCtor({
+            formats: ["code_128", "code_39", "ean_13", "ean_8", "upc_a", "upc_e", "qr_code"],
+          });
+
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: "environment" } },
+            audio: false,
+          });
+          if (cancelled) {
+            stream.getTracks().forEach((t) => t.stop());
+            return;
+          }
+          scannerStreamRef.current = stream;
+
+          video.srcObject = stream;
+          await video.play();
+          setScannerStatus("바코드를 화면 중앙에 맞춰주세요.");
+
+          const scanLoop = async () => {
+            if (cancelled || !scannerOpen) return;
+            try {
+              const barcodes = await detector.detect(video);
+              if (barcodes.length > 0) {
+                const raw = (barcodes[0].rawValue || "").trim();
+                if (raw) {
+                  applyScannedValue(raw);
+                  return;
+                }
+              }
+            } catch {
+              // ignore intermittent detection errors
+            }
+            rafId = window.requestAnimationFrame(scanLoop);
+          };
+
+          rafId = window.requestAnimationFrame(scanLoop);
+          return;
+        }
+
+        setScannerStatus("호환 모드로 카메라를 시작합니다...");
+        const zxing = (await import("@zxing/browser")) as {
+          BrowserMultiFormatReader: new () => {
+            decodeFromConstraints: (
+              constraints: MediaStreamConstraints,
+              previewElem: HTMLVideoElement,
+              callbackFn: (result: { getText: () => string } | null, error?: unknown) => void,
+            ) => Promise<{ stop: () => void }>;
+          };
+        };
+        const reader = new zxing.BrowserMultiFormatReader();
+        const controls = await reader.decodeFromConstraints(
+          { video: { facingMode: { ideal: "environment" } }, audio: false },
+          video,
+          (result) => {
+            if (cancelled || !result) return;
+            const raw = result.getText().trim();
+            if (!raw) return;
+            applyScannedValue(raw);
+            scannerControlsRef.current?.stop();
+            scannerControlsRef.current = null;
+          },
+        );
+        if (cancelled) {
+          controls.stop();
+          return;
+        }
+        scannerControlsRef.current = controls;
+        setScannerStatus("바코드를 화면 중앙에 맞춰주세요.");
       } catch (e) {
         setScannerError(e instanceof Error ? e.message : "스캔 초기화 실패");
       }
@@ -313,12 +366,9 @@ export default function HomePage() {
     return () => {
       cancelled = true;
       if (rafId) window.cancelAnimationFrame(rafId);
-      if (scannerStreamRef.current) {
-        scannerStreamRef.current.getTracks().forEach((track) => track.stop());
-        scannerStreamRef.current = null;
-      }
+      stopScannerResources();
     };
-  }, [scannerOpen]);
+  }, [scannerOpen, scannerTarget]);
 
   useEffect(() => {
     try {
