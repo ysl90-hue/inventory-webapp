@@ -1,0 +1,4 @@
+position,item number,designation,quantity,unit of quantity,spare parts identifier,current stock,minimum stock,location
+1,P-001,Bearing 6204,1,EA,SPARE,120,30,A-01
+2,P-002,Bolt M8x20,4,EA,SPARE,500,100,B-03
+3,P-003,Gasket Set,1,SET,OPTION,15,5,C-02
