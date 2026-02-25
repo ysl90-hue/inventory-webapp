@@ -77,6 +77,13 @@ a {
   margin-top: 10px;
 }
 
+.filterChips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
 .input,
 .select,
 .btn {
@@ -193,6 +200,10 @@ td {
 th {
   color: var(--muted);
   font-weight: 600;
+  background: rgba(255, 253, 250, 0.97);
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
 .low {
@@ -205,6 +216,14 @@ th {
   gap: 8px;
   flex-wrap: wrap;
   min-width: 0;
+}
+
+.stickyActionBar {
+  position: sticky;
+  bottom: 0;
+  padding-top: 10px;
+  padding-bottom: max(8px, env(safe-area-inset-bottom));
+  background: linear-gradient(to top, rgba(255, 253, 250, 0.98), rgba(255, 253, 250, 0.75), transparent);
 }
 
 .btn.small {
@@ -342,6 +361,32 @@ th {
   margin-bottom: 12px;
 }
 
+.txBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 46px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #eef4f2;
+  color: #0f5f58;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.txBadge.out {
+  background: #fdecec;
+  color: #991b1b;
+  border-color: #efc7c7;
+}
+
+.txBadge.in {
+  background: #e8f7ef;
+  color: #166534;
+  border-color: #b9e3c8;
+}
+
 .scannerOverlay {
   position: fixed;
   inset: 0;
@@ -378,6 +423,46 @@ th {
   border-radius: 12px;
   border: 1px solid var(--line);
   background: #111827;
+}
+
+.scannerFrame {
+  position: relative;
+}
+
+.scannerAim {
+  position: absolute;
+  inset: 10% 8%;
+  border-radius: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  box-shadow:
+    0 0 0 9999px rgba(17, 24, 39, 0.16) inset,
+    0 0 0 1px rgba(15, 118, 110, 0.5);
+  pointer-events: none;
+}
+
+.scannerAim::before,
+.scannerAim::after {
+  content: "";
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border: 3px solid #2dd4bf;
+}
+
+.scannerAim::before {
+  top: -2px;
+  left: -2px;
+  border-right: none;
+  border-bottom: none;
+  border-radius: 12px 0 0 0;
+}
+
+.scannerAim::after {
+  right: -2px;
+  bottom: -2px;
+  border-left: none;
+  border-top: none;
+  border-radius: 0 0 12px 0;
 }
 
 @media (max-width: 900px) {
@@ -419,6 +504,16 @@ th {
     width: 100%;
   }
 
+  .filterChips {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .filterChips .btn {
+    width: 100%;
+    min-height: 38px;
+  }
+
   .formGrid {
     grid-template-columns: 1fr;
   }
@@ -455,10 +550,27 @@ th {
     aspect-ratio: 4 / 3;
   }
 
+  .scannerAim {
+    inset: 12% 6%;
+  }
+
   .panel,
   .adminBlock,
   .authBox {
     width: 100%;
     max-width: 100%;
+  }
+
+  .btn {
+    min-height: 44px;
+  }
+
+  .btn.small {
+    min-height: 36px;
+  }
+
+  .input,
+  .select {
+    min-height: 44px;
   }
 }

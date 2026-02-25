@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
@@ -61,6 +61,7 @@ export default function HomePage() {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [showLowOnly, setShowLowOnly] = useState(false);
+  const [partsSort, setPartsSort] = useState<"item" | "stockAsc" | "stockDesc" | "designation">("item");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -81,6 +82,7 @@ export default function HomePage() {
   const [authRole, setAuthRole] = useState<"user" | "admin" | null>(null);
   const [authDisplayName, setAuthDisplayName] = useState<string | null>(null);
   const [adminToolsOpen, setAdminToolsOpen] = useState(false);
+  const [txToolsOpen, setTxToolsOpen] = useState(true);
   const [globalMinimumStock, setGlobalMinimumStock] = useState("0");
   const [authChecked, setAuthChecked] = useState(false);
   const [authCheckTimedOut, setAuthCheckTimedOut] = useState(false);
@@ -89,6 +91,8 @@ export default function HomePage() {
   const [scannerError, setScannerError] = useState<string | null>(null);
   const [scannerStatus, setScannerStatus] = useState<string>("카메라를 준비합니다...");
   const [isMobileLayout, setIsMobileLayout] = useState(false);
+  const [scannerTorchSupported, setScannerTorchSupported] = useState(false);
+  const [scannerTorchOn, setScannerTorchOn] = useState(false);
   const scannerVideoRef = useRef<HTMLVideoElement | null>(null);
   const scannerStreamRef = useRef<MediaStream | null>(null);
   const scannerControlsRef = useRef<{ stop: () => void } | null>(null);
@@ -96,6 +100,7 @@ export default function HomePage() {
   const scannerLastAcceptedRef = useRef<{ value: string; at: number } | null>(null);
 
   const isAdmin = authRole === "admin";
+  const deferredSearchInput = useDeferredValue(searchInput);
 
   function stopScannerResources() {
     if (scannerCloseTimerRef.current) {
@@ -114,6 +119,66 @@ export default function HomePage() {
     if (video?.srcObject && "getTracks" in video.srcObject) {
       (video.srcObject as MediaStream).getTracks().forEach((track) => track.stop());
       video.srcObject = null;
+    }
+    setScannerTorchOn(false);
+    setScannerTorchSupported(false);
+  }
+
+  function triggerScannerSuccessFeedback() {
+    try {
+      if (navigator.vibrate) {
+        navigator.vibrate(40);
+      }
+    } catch {
+      // ignore vibration errors
+    }
+
+    try {
+      const AudioContextCtor = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AudioContextCtor) return;
+      const ctx = new AudioContextCtor();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = 1046;
+      gain.gain.value = 0.03;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.06);
+      window.setTimeout(() => void ctx.close().catch(() => undefined), 120);
+    } catch {
+      // ignore audio feedback errors
+    }
+  }
+
+  function detectTorchSupportFromVideo() {
+    const video = scannerVideoRef.current;
+    const stream = (video?.srcObject as MediaStream | null) ?? scannerStreamRef.current;
+    const track = stream?.getVideoTracks()?.[0];
+    if (!track || typeof track.getCapabilities !== "function") {
+      setScannerTorchSupported(false);
+      return;
+    }
+    const caps = track.getCapabilities() as MediaTrackCapabilities & { torch?: boolean };
+    setScannerTorchSupported(Boolean(caps.torch));
+  }
+
+  async function toggleScannerTorch() {
+    const next = !scannerTorchOn;
+    const video = scannerVideoRef.current;
+    const stream = (video?.srcObject as MediaStream | null) ?? scannerStreamRef.current;
+    const track = stream?.getVideoTracks()?.[0];
+    if (!track) return;
+    try {
+      await track.applyConstraints({
+        advanced: [{ torch: next } as MediaTrackConstraintSet & { torch?: boolean }],
+      });
+      setScannerTorchOn(next);
+      setScannerStatus(next ? "손전등 켜짐" : "손전등 꺼짐");
+    } catch {
+      setScannerError("손전등 제어를 지원하지 않는 카메라입니다.");
+      setScannerTorchSupported(false);
     }
   }
 
@@ -229,6 +294,19 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setSearch(deferredSearchInput.trim());
+    }, 180);
+    return () => window.clearTimeout(timer);
+  }, [deferredSearchInput]);
+
+  useEffect(() => {
+    if (!isMobileLayout) {
+      setTxToolsOpen(true);
+    }
+  }, [isMobileLayout]);
+
+  useEffect(() => {
     async function loadMe() {
       if (!session?.access_token) {
         setAuthRole(null);
@@ -306,6 +384,7 @@ export default function HomePage() {
           return;
         }
         scannerLastAcceptedRef.current = { value: scanned, at: now };
+        triggerScannerSuccessFeedback();
         if (scannerTarget === "tx") {
           setTxForm((v) => ({ ...v, itemNumber: scanned }));
         } else {
@@ -349,6 +428,7 @@ export default function HomePage() {
         }
         scannerControlsRef.current = controls;
         setScannerStatus(isMobile ? "바코드를 가까이 비추고 화면 중앙에 맞춰주세요." : "바코드를 화면 중앙에 맞춰주세요.");
+        window.setTimeout(detectTorchSupportFromVideo, 400);
       };
 
       try {
@@ -369,6 +449,7 @@ export default function HomePage() {
           scannerStreamRef.current = stream;
           video.srcObject = stream;
           await video.play();
+          detectTorchSupportFromVideo();
           setScannerStatus(isMobile ? "바코드를 가까이 비추고 화면 중앙에 맞춰주세요." : "바코드를 화면 중앙에 맞춰주세요.");
 
           let lastScanAt = 0;
@@ -415,7 +496,12 @@ export default function HomePage() {
             // keep original error below
           }
         }
-        setScannerError(e instanceof Error ? e.message : "스캔 초기화 실패");
+        const message = e instanceof Error ? e.message : "스캔 초기화 실패";
+        if (/permission|denied|NotAllowed/i.test(message)) {
+          setScannerError("카메라 권한이 필요합니다. 브라우저 권한 설정에서 허용해주세요.");
+        } else {
+          setScannerError(message);
+        }
       }
     }
 
@@ -445,14 +531,27 @@ export default function HomePage() {
       return [];
     }
     const globalMin = Number(globalMinimumStock || 0);
-    return parts.filter((part) => {
+    const filtered = parts.filter((part) => {
       const hit =
         part.item_number.toLowerCase().includes(keyword) ||
         part.designation.toLowerCase().includes(keyword);
       const low = Number(part.current_stock) <= globalMin;
       return hit && (!showLowOnly || low);
     });
-  }, [parts, search, showLowOnly, globalMinimumStock]);
+    filtered.sort((a, b) => {
+      if (partsSort === "stockAsc") {
+        return Number(a.current_stock) - Number(b.current_stock);
+      }
+      if (partsSort === "stockDesc") {
+        return Number(b.current_stock) - Number(a.current_stock);
+      }
+      if (partsSort === "designation") {
+        return a.designation.localeCompare(b.designation);
+      }
+      return a.item_number.localeCompare(b.item_number);
+    });
+    return filtered;
+  }, [parts, search, showLowOnly, globalMinimumStock, partsSort]);
 
   function submitSearch() {
     setSearch(searchInput.trim());
@@ -788,6 +887,36 @@ export default function HomePage() {
             검색
           </button>
         </div>
+        <div className="filterChips" aria-label="정렬">
+          <button
+            className={`btn secondary small ${partsSort === "item" ? "activeChoice" : ""}`}
+            type="button"
+            onClick={() => setPartsSort("item")}
+          >
+            품목번호순
+          </button>
+          <button
+            className={`btn secondary small ${partsSort === "designation" ? "activeChoice" : ""}`}
+            type="button"
+            onClick={() => setPartsSort("designation")}
+          >
+            품명순
+          </button>
+          <button
+            className={`btn secondary small ${partsSort === "stockAsc" ? "activeChoice" : ""}`}
+            type="button"
+            onClick={() => setPartsSort("stockAsc")}
+          >
+            재고낮은순
+          </button>
+          <button
+            className={`btn secondary small ${partsSort === "stockDesc" ? "activeChoice" : ""}`}
+            type="button"
+            onClick={() => setPartsSort("stockDesc")}
+          >
+            재고높은순
+          </button>
+        </div>
         <div className="toolbarActions">
           <button
             className={`btn ${showLowOnly ? "" : "secondary"}`}
@@ -941,11 +1070,12 @@ export default function HomePage() {
                       <input
                         className="input"
                         type="number"
+                        inputMode="decimal"
                         autoComplete="off"
                         step="0.01"
                         value={globalMinimumStock}
                         onChange={(e) => setGlobalMinimumStock(e.target.value)}
-                        style={{ width: 180 }}
+                        style={{ width: isMobileLayout ? "100%" : 180 }}
                       />
                       <button className="btn secondary small" type="button" onClick={saveGlobalMinimumStock}>
                         기준 저장
@@ -993,6 +1123,7 @@ export default function HomePage() {
                         <input
                           className="input"
                           type="number"
+                          inputMode="decimal"
                           autoComplete="off"
                           step="0.01"
                           value={partForm.currentStock}
@@ -1018,6 +1149,7 @@ export default function HomePage() {
                         <input
                           className="input"
                           type="number"
+                          inputMode="decimal"
                           autoComplete="off"
                           step="0.01"
                           value={partForm.quantity}
@@ -1026,7 +1158,7 @@ export default function HomePage() {
                       </div>
                     </div>
 
-                    <div className="actions">
+                    <div className={`actions ${isMobileLayout ? "stickyActionBar" : ""}`}>
                       <button className="btn" type="submit" disabled={savingPart}>
                         {savingPart ? "저장 중..." : partForm.id ? "수정 저장" : "품목 등록"}
                       </button>
@@ -1044,7 +1176,19 @@ export default function HomePage() {
             <div className="panelNotice">품목 등록/수정/삭제는 관리자 로그인 후 사용할 수 있습니다.</div>
           )}
 
-          <h2 style={{ marginTop: 20 }}>입출고 처리</h2>
+          <div className="adminHeaderRow" style={{ marginTop: 20 }}>
+            <h2 style={{ margin: 0 }}>입출고 처리</h2>
+            {isMobileLayout ? (
+              <button
+                className="btn secondary small"
+                type="button"
+                onClick={() => setTxToolsOpen((v) => !v)}
+              >
+                {txToolsOpen ? "접기" : "열기"}
+              </button>
+            ) : null}
+          </div>
+          {txToolsOpen ? (
           <form onSubmit={submitTx}>
             <div className="formRow">
               <label className="label">품목번호 (item_number)</label>
@@ -1087,6 +1231,7 @@ export default function HomePage() {
               <input
                 className="input"
                 type="number"
+                inputMode="decimal"
                 min="0"
                 step="0.01"
                 autoComplete="off"
@@ -1106,7 +1251,7 @@ export default function HomePage() {
               />
             </div>
 
-            <div className="actions">
+            <div className={`actions ${isMobileLayout ? "stickyActionBar" : ""}`}>
               <button className="btn" type="submit">
                 저장
               </button>
@@ -1119,6 +1264,9 @@ export default function HomePage() {
               </button>
             </div>
           </form>
+          ) : (
+            <div className="panelNotice">입출고 처리 폼이 접혀 있습니다. 열기를 눌러 사용하세요.</div>
+          )}
 
         </section>
       </div>
@@ -1131,7 +1279,7 @@ export default function HomePage() {
               <article key={tx.id} className="dataCard">
                 <div className="dataCardHead">
                   <strong>{tx.parts?.item_number || "-"}</strong>
-                  <span>{tx.tx_type}</span>
+                  <span className={`txBadge ${tx.tx_type === "OUT" ? "out" : "in"}`}>{tx.tx_type}</span>
                 </div>
                 <div>{tx.parts?.designation || "-"}</div>
                 <div className="kvGrid">
@@ -1141,7 +1289,7 @@ export default function HomePage() {
                   </div>
                   <div>
                     <span className="meta">날짜</span>
-                    <div>{new Date(tx.created_at).toLocaleDateString("ko-KR")}</div>
+                    <div>{new Date(tx.created_at).toLocaleString("ko-KR")}</div>
                   </div>
                   <div>
                     <span className="meta">메모</span>
@@ -1173,12 +1321,12 @@ export default function HomePage() {
               <tbody>
                 {txHistory.map((tx) => (
                   <tr key={tx.id}>
-                    <td>{tx.tx_type}</td>
+                    <td><span className={`txBadge ${tx.tx_type === "OUT" ? "out" : "in"}`}>{tx.tx_type}</span></td>
                     <td>{tx.parts?.item_number || "-"}</td>
                     <td>{tx.parts?.designation || "-"}</td>
                     <td>{tx.qty}</td>
                     <td>{tx.memo || "-"}</td>
-                    <td>{new Date(tx.created_at).toLocaleDateString("ko-KR")}</td>
+                    <td>{new Date(tx.created_at).toLocaleString("ko-KR")}</td>
                     <td>{tx.actor_name || "-"}</td>
                   </tr>
                 ))}
@@ -1198,14 +1346,24 @@ export default function HomePage() {
           <div className="scannerModal">
             <div className="adminHeaderRow" style={{ marginBottom: 8 }}>
               <h2 style={{ margin: 0 }}>바코드 스캔</h2>
-              <button className="btn secondary small" type="button" onClick={() => setScannerOpen(false)}>
-                닫기
-              </button>
+              <div className="actions">
+                {scannerTorchSupported ? (
+                  <button className="btn secondary small" type="button" onClick={() => void toggleScannerTorch()}>
+                    {scannerTorchOn ? "손전등 끄기" : "손전등 켜기"}
+                  </button>
+                ) : null}
+                <button className="btn secondary small" type="button" onClick={() => setScannerOpen(false)}>
+                  닫기
+                </button>
+              </div>
             </div>
             <div className="scannerGuide">
               {isMobileLayout ? "모바일: 바코드를 10~20cm 거리에서 천천히 맞춰주세요." : "PC: 카메라 앞 바코드를 중앙에 고정해주세요."}
             </div>
-            <video ref={scannerVideoRef} className="scannerVideo" muted playsInline />
+            <div className="scannerFrame">
+              <video ref={scannerVideoRef} className="scannerVideo" muted playsInline />
+              <div className="scannerAim" aria-hidden="true" />
+            </div>
             <div className="meta" style={{ marginTop: 8 }}>
               {(scannerTarget === "part" ? "[품목 등록] " : "[입출고] ") + (scannerError || scannerStatus)}
             </div>
