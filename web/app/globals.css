@@ -59,6 +59,24 @@ a {
   margin-bottom: 14px;
 }
 
+.toolbarPanel {
+  margin-bottom: 14px;
+  padding: 12px;
+}
+
+.toolbarSearch {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.toolbarActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
 .input,
 .select,
 .btn {
@@ -68,6 +86,12 @@ a {
   background: var(--card);
   padding: 0 12px;
   font: inherit;
+}
+
+.input,
+.select {
+  width: 100%;
+  min-width: 0;
 }
 
 .btn {
@@ -95,6 +119,11 @@ a {
   display: grid;
   grid-template-columns: 1.45fr 1.15fr;
   gap: 16px;
+  align-items: start;
+}
+
+.grid > * {
+  min-width: 0;
 }
 
 .panel {
@@ -103,11 +132,33 @@ a {
   border-radius: 16px;
   padding: 14px;
   backdrop-filter: blur(6px);
+  min-width: 0;
 }
 
 .panel h2 {
   margin: 0 0 10px;
   font-size: 1rem;
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.statCard {
+  background: rgba(255, 253, 250, 0.82);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px 12px;
+  backdrop-filter: blur(6px);
+}
+
+.statValue {
+  margin-top: 4px;
+  font-size: 1.1rem;
+  font-weight: 700;
 }
 
 table {
@@ -153,6 +204,7 @@ th {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  min-width: 0;
 }
 
 .btn.small {
@@ -220,6 +272,52 @@ th {
   background: rgba(255, 253, 250, 0.65);
 }
 
+.partsCards,
+.historyCards {
+  display: grid;
+  gap: 10px;
+}
+
+.dataCard {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 253, 250, 0.85);
+  padding: 10px;
+}
+
+.dataCardHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.dataCardHead > *:last-child {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.dataCardHead > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.kvGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 10px;
+  margin-top: 8px;
+}
+
+.kvGrid > div {
+  min-width: 0;
+}
+
+.kvGrid > div > div {
+  word-break: break-word;
+}
+
 .checkRow {
   display: inline-flex;
   align-items: center;
@@ -263,6 +361,16 @@ th {
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.18);
 }
 
+.scannerGuide {
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #d9efe7;
+  background: rgba(217, 239, 231, 0.45);
+  color: #0f5f58;
+  font-size: 0.85rem;
+}
+
 .scannerVideo {
   width: 100%;
   aspect-ratio: 16 / 9;
@@ -285,8 +393,30 @@ th {
     grid-template-columns: 1fr;
   }
 
-  .toolbar {
+  .header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .title {
+    font-size: 1.5rem;
+  }
+
+  .statsGrid {
     grid-template-columns: 1fr;
+  }
+
+  .toolbarSearch {
+    grid-template-columns: 1fr;
+  }
+
+  .toolbarActions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .toolbarActions .btn {
+    width: 100%;
   }
 
   .formGrid {
@@ -296,5 +426,39 @@ th {
   .authRow {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .kvGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .dataCardHead {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .scannerOverlay {
+    padding: 0;
+    align-items: end;
+  }
+
+  .scannerModal {
+    width: 100%;
+    border-radius: 18px 18px 0 0;
+    border-bottom: none;
+    padding: 12px;
+    max-height: 90svh;
+    overflow: auto;
+  }
+
+  .scannerVideo {
+    aspect-ratio: 4 / 3;
+  }
+
+  .panel,
+  .adminBlock,
+  .authBox {
+    width: 100%;
+    max-width: 100%;
   }
 }

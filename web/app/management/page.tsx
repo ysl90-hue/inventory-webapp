@@ -88,13 +88,20 @@ export default function HomePage() {
   const [scannerTarget, setScannerTarget] = useState<"tx" | "part">("tx");
   const [scannerError, setScannerError] = useState<string | null>(null);
   const [scannerStatus, setScannerStatus] = useState<string>("카메라를 준비합니다...");
+  const [isMobileLayout, setIsMobileLayout] = useState(false);
   const scannerVideoRef = useRef<HTMLVideoElement | null>(null);
   const scannerStreamRef = useRef<MediaStream | null>(null);
   const scannerControlsRef = useRef<{ stop: () => void } | null>(null);
+  const scannerCloseTimerRef = useRef<number | null>(null);
+  const scannerLastAcceptedRef = useRef<{ value: string; at: number } | null>(null);
 
   const isAdmin = authRole === "admin";
 
   function stopScannerResources() {
+    if (scannerCloseTimerRef.current) {
+      window.clearTimeout(scannerCloseTimerRef.current);
+      scannerCloseTimerRef.current = null;
+    }
     if (scannerControlsRef.current) {
       scannerControlsRef.current.stop();
       scannerControlsRef.current = null;
@@ -214,6 +221,14 @@ export default function HomePage() {
   }, [authChecked, session]);
 
   useEffect(() => {
+    const mq = window.matchMedia("(max-width: 900px)");
+    const apply = () => setIsMobileLayout(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
+  useEffect(() => {
     async function loadMe() {
       if (!session?.access_token) {
         setAuthRole(null);
@@ -258,76 +273,54 @@ export default function HomePage() {
     }
 
     let cancelled = false;
-    let rafId = 0;
+    let scanTimerId = 0;
 
     async function startScanner() {
-      try {
-        const video = scannerVideoRef.current;
-        if (!video) {
-          throw new Error("카메라 미리보기 초기화에 실패했습니다.");
-        }
-
-        const applyScannedValue = (raw: string) => {
-          const scanned = raw.toUpperCase();
-          if (scannerTarget === "tx") {
-            setTxForm((v) => ({ ...v, itemNumber: scanned }));
-          } else {
-            setPartForm((v) => ({ ...v, itemNumber: scanned }));
-          }
-          setScannerStatus(`인식됨: ${raw}`);
-          window.setTimeout(() => setScannerOpen(false), 200);
+      const video = scannerVideoRef.current;
+      const BarcodeDetectorCtor = (window as unknown as {
+        BarcodeDetector?: new (opts?: { formats?: string[] }) => {
+          detect: (source: ImageBitmapSource) => Promise<Array<{ rawValue?: string }>>;
         };
+      }).BarcodeDetector;
+      const scannerFormats = ["code_128", "code_39", "ean_13", "ean_8", "upc_a", "upc_e"];
+      const isMobile = window.matchMedia("(max-width: 900px)").matches;
+      const videoConstraints: MediaTrackConstraints = {
+        facingMode: { ideal: "environment" },
+        width: { ideal: isMobile ? 960 : 1280 },
+        height: { ideal: isMobile ? 540 : 720 },
+        frameRate: { ideal: isMobile ? 24 : 30, max: isMobile ? 30 : 60 },
+      };
+      const nativeScanIntervalMs = isMobile ? 220 : 160;
+      const duplicateCooldownMs = 1400;
 
-        const BarcodeDetectorCtor = (window as unknown as {
-          BarcodeDetector?: new (opts?: { formats?: string[] }) => {
-            detect: (source: ImageBitmapSource) => Promise<Array<{ rawValue?: string }>>;
-          };
-        }).BarcodeDetector;
-        if (!navigator.mediaDevices?.getUserMedia) {
-          throw new Error("이 브라우저는 카메라 접근을 지원하지 않습니다.");
-        }
+      if (!video) {
+        setScannerError("카메라 미리보기 초기화에 실패했습니다.");
+        return;
+      }
 
-        if (BarcodeDetectorCtor) {
-          const detector = new BarcodeDetectorCtor({
-            formats: ["code_128", "code_39", "ean_13", "ean_8", "upc_a", "upc_e", "qr_code"],
-          });
-
-          const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { ideal: "environment" } },
-            audio: false,
-          });
-          if (cancelled) {
-            stream.getTracks().forEach((t) => t.stop());
-            return;
-          }
-          scannerStreamRef.current = stream;
-
-          video.srcObject = stream;
-          await video.play();
-          setScannerStatus("바코드를 화면 중앙에 맞춰주세요.");
-
-          const scanLoop = async () => {
-            if (cancelled || !scannerOpen) return;
-            try {
-              const barcodes = await detector.detect(video);
-              if (barcodes.length > 0) {
-                const raw = (barcodes[0].rawValue || "").trim();
-                if (raw) {
-                  applyScannedValue(raw);
-                  return;
-                }
-              }
-            } catch {
-              // ignore intermittent detection errors
-            }
-            rafId = window.requestAnimationFrame(scanLoop);
-          };
-
-          rafId = window.requestAnimationFrame(scanLoop);
+      const applyScannedValue = (raw: string) => {
+        const scanned = raw.toUpperCase();
+        const now = Date.now();
+        const last = scannerLastAcceptedRef.current;
+        if (last && last.value === scanned && now - last.at < duplicateCooldownMs) {
           return;
         }
+        scannerLastAcceptedRef.current = { value: scanned, at: now };
+        if (scannerTarget === "tx") {
+          setTxForm((v) => ({ ...v, itemNumber: scanned }));
+        } else {
+          setPartForm((v) => ({ ...v, itemNumber: scanned }));
+        }
+        setScannerStatus(`인식됨: ${raw}`);
+        if (scannerCloseTimerRef.current) {
+          window.clearTimeout(scannerCloseTimerRef.current);
+        }
+        scannerCloseTimerRef.current = window.setTimeout(() => setScannerOpen(false), 180);
+      };
 
-        setScannerStatus("호환 모드로 카메라를 시작합니다...");
+      const startZxingFallback = async (status = "호환 모드로 카메라를 시작합니다...") => {
+        setScannerError(null);
+        setScannerStatus(status);
         const zxing = (await import("@zxing/browser")) as {
           BrowserMultiFormatReader: new () => {
             decodeFromConstraints: (
@@ -339,7 +332,7 @@ export default function HomePage() {
         };
         const reader = new zxing.BrowserMultiFormatReader();
         const controls = await reader.decodeFromConstraints(
-          { video: { facingMode: { ideal: "environment" } }, audio: false },
+          { video: videoConstraints, audio: false },
           video,
           (result) => {
             if (cancelled || !result) return;
@@ -355,8 +348,73 @@ export default function HomePage() {
           return;
         }
         scannerControlsRef.current = controls;
-        setScannerStatus("바코드를 화면 중앙에 맞춰주세요.");
+        setScannerStatus(isMobile ? "바코드를 가까이 비추고 화면 중앙에 맞춰주세요." : "바코드를 화면 중앙에 맞춰주세요.");
+      };
+
+      try {
+        if (!navigator.mediaDevices?.getUserMedia) {
+          throw new Error("이 브라우저는 카메라 접근을 지원하지 않습니다.");
+        }
+
+        if (BarcodeDetectorCtor) {
+          const detector = new BarcodeDetectorCtor({ formats: scannerFormats });
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: videoConstraints,
+            audio: false,
+          });
+          if (cancelled) {
+            stream.getTracks().forEach((t) => t.stop());
+            return;
+          }
+          scannerStreamRef.current = stream;
+          video.srcObject = stream;
+          await video.play();
+          setScannerStatus(isMobile ? "바코드를 가까이 비추고 화면 중앙에 맞춰주세요." : "바코드를 화면 중앙에 맞춰주세요.");
+
+          let lastScanAt = 0;
+          const scanLoop = async () => {
+            if (cancelled || !scannerOpen) return;
+
+            if (document.visibilityState === "hidden" || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+              scanTimerId = window.setTimeout(scanLoop, nativeScanIntervalMs);
+              return;
+            }
+
+            const now = performance.now();
+            if (now - lastScanAt < nativeScanIntervalMs) {
+              scanTimerId = window.setTimeout(scanLoop, nativeScanIntervalMs - (now - lastScanAt));
+              return;
+            }
+            lastScanAt = now;
+
+            try {
+              const barcodes = await detector.detect(video);
+              if (barcodes.length > 0) {
+                const raw = (barcodes[0].rawValue || "").trim();
+                if (raw) {
+                  applyScannedValue(raw);
+                  return;
+                }
+              }
+            } catch {
+              // ignore intermittent detection errors
+            }
+            scanTimerId = window.setTimeout(scanLoop, nativeScanIntervalMs);
+          };
+          scanTimerId = window.setTimeout(scanLoop, nativeScanIntervalMs);
+          return;
+        }
+
+        await startZxingFallback();
       } catch (e) {
+        if (BarcodeDetectorCtor) {
+          try {
+            await startZxingFallback("기본 스캐너가 불안정하여 호환 모드로 전환합니다...");
+            return;
+          } catch {
+            // keep original error below
+          }
+        }
         setScannerError(e instanceof Error ? e.message : "스캔 초기화 실패");
       }
     }
@@ -365,7 +423,7 @@ export default function HomePage() {
 
     return () => {
       cancelled = true;
-      if (rafId) window.cancelAnimationFrame(rafId);
+      if (scanTimerId) window.clearTimeout(scanTimerId);
       stopScannerResources();
     };
   }, [scannerOpen, scannerTarget]);
@@ -682,6 +740,21 @@ export default function HomePage() {
         </div>
       </header>
 
+      <section className="statsGrid" aria-label="요약 정보">
+        <div className="statCard">
+          <div className="meta">전체 품목</div>
+          <div className="statValue">{parts.length}</div>
+        </div>
+        <div className="statCard">
+          <div className="meta">부족 재고</div>
+          <div className={`statValue ${lowCount > 0 ? "low" : ""}`}>{lowCount}</div>
+        </div>
+        <div className="statCard">
+          <div className="meta">레이아웃</div>
+          <div className="statValue">{isMobileLayout ? "Mobile" : "Desktop"}</div>
+        </div>
+      </section>
+
       <section className="panel" style={{ marginBottom: 14 }}>
         <h2>계정</h2>
         <div className="authBox" style={{ border: "none", padding: 0, background: "transparent" }}>
@@ -697,35 +770,39 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="toolbar">
-        <input
-          className="input"
-          placeholder="Search item_number / designation"
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              submitSearch();
-            }
-          }}
-        />
-        <button className="btn" type="button" onClick={submitSearch}>
-          검색
-        </button>
-        <button
-          className={`btn ${showLowOnly ? "" : "secondary"}`}
-          type="button"
-          onClick={() => setShowLowOnly((v) => !v)}
-        >
-          {showLowOnly ? "Low Stock Only" : "Show All"}
-        </button>
-        <button className="btn secondary" type="button" onClick={clearSearch}>
-          검색초기화
-        </button>
-        <button className="btn secondary" type="button" onClick={() => void loadData()}>
-          Refresh
-        </button>
+      <section className="toolbarPanel panel" aria-label="검색 및 필터">
+        <div className="toolbarSearch">
+          <input
+            className="input"
+            placeholder="Search item_number / designation"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                submitSearch();
+              }
+            }}
+          />
+          <button className="btn" type="button" onClick={submitSearch}>
+            검색
+          </button>
+        </div>
+        <div className="toolbarActions">
+          <button
+            className={`btn ${showLowOnly ? "" : "secondary"}`}
+            type="button"
+            onClick={() => setShowLowOnly((v) => !v)}
+          >
+            {showLowOnly ? "Low Stock Only" : "Show All"}
+          </button>
+          <button className="btn secondary" type="button" onClick={clearSearch}>
+            검색초기화
+          </button>
+          <button className="btn secondary" type="button" onClick={() => void loadData()}>
+            Refresh
+          </button>
+        </div>
       </section>
 
       {error ? (
@@ -737,63 +814,107 @@ export default function HomePage() {
       <div className="grid">
         <section className="panel">
           <h2>Parts</h2>
-          <div style={{ overflowX: "auto" }}>
-            <table>
-              <thead>
-                <tr>
-                  <th>Item No</th>
-                  <th>Designation</th>
-                  <th>Stock</th>
-                  <th>Min</th>
-                  <th>Unit</th>
-                  <th>Location</th>
-                  {isAdmin ? <th>Actions</th> : null}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredParts.map((part) => {
-                  const isLow = Number(part.current_stock) <= Number(globalMinimumStock || 0);
-                  return (
-                    <tr key={part.id}>
-                      <td>{part.item_number}</td>
-                      <td>{part.designation}</td>
-                      <td className={isLow ? "low" : undefined}>{part.current_stock}</td>
-                      <td>{globalMinimumStock || "0"}</td>
-                      <td>{part.unit_of_quantity || "-"}</td>
-                      <td>{part.location || "-"}</td>
-                      {isAdmin ? (
-                        <td>
-                          <div className="actions">
-                            <button
-                              className="btn secondary small"
-                              type="button"
-                              onClick={() => editPart(part)}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              className="btn danger small"
-                              type="button"
-                              onClick={() => void deletePart(part)}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </td>
-                      ) : null}
-                    </tr>
-                  );
-                })}
-                {!loading && filteredParts.length === 0 ? (
+          {isMobileLayout ? (
+            <div className="partsCards">
+              {filteredParts.map((part) => {
+                const isLow = Number(part.current_stock) <= Number(globalMinimumStock || 0);
+                return (
+                  <article key={part.id} className="dataCard">
+                    <div className="dataCardHead">
+                      <strong>{part.item_number}</strong>
+                      <span className={isLow ? "low" : undefined}>
+                        재고 {part.current_stock} / 최소 {globalMinimumStock || "0"}
+                      </span>
+                    </div>
+                    <div className="meta">{part.designation}</div>
+                    <div className="kvGrid">
+                      <div>
+                        <span className="meta">단위</span>
+                        <div>{part.unit_of_quantity || "-"}</div>
+                      </div>
+                      <div>
+                        <span className="meta">위치</span>
+                        <div>{part.location || "-"}</div>
+                      </div>
+                    </div>
+                    {isAdmin ? (
+                      <div className="actions" style={{ marginTop: 10 }}>
+                        <button className="btn secondary small" type="button" onClick={() => editPart(part)}>
+                          Edit
+                        </button>
+                        <button className="btn danger small" type="button" onClick={() => void deletePart(part)}>
+                          Delete
+                        </button>
+                      </div>
+                    ) : null}
+                  </article>
+                );
+              })}
+              {!loading && filteredParts.length === 0 ? (
+                <div className="panelNotice">
+                  {search.trim() ? "No data" : "검색어를 입력하면 품목 목록이 표시됩니다."}
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div style={{ overflowX: "auto" }}>
+              <table>
+                <thead>
                   <tr>
-                    <td colSpan={isAdmin ? 7 : 6}>
-                      {search.trim() ? "No data" : "검색어를 입력하면 품목 목록이 표시됩니다."}
-                    </td>
+                    <th>Item No</th>
+                    <th>Designation</th>
+                    <th>Stock</th>
+                    <th>Min</th>
+                    <th>Unit</th>
+                    <th>Location</th>
+                    {isAdmin ? <th>Actions</th> : null}
                   </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {filteredParts.map((part) => {
+                    const isLow = Number(part.current_stock) <= Number(globalMinimumStock || 0);
+                    return (
+                      <tr key={part.id}>
+                        <td>{part.item_number}</td>
+                        <td>{part.designation}</td>
+                        <td className={isLow ? "low" : undefined}>{part.current_stock}</td>
+                        <td>{globalMinimumStock || "0"}</td>
+                        <td>{part.unit_of_quantity || "-"}</td>
+                        <td>{part.location || "-"}</td>
+                        {isAdmin ? (
+                          <td>
+                            <div className="actions">
+                              <button
+                                className="btn secondary small"
+                                type="button"
+                                onClick={() => editPart(part)}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                className="btn danger small"
+                                type="button"
+                                onClick={() => void deletePart(part)}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        ) : null}
+                      </tr>
+                    );
+                  })}
+                  {!loading && filteredParts.length === 0 ? (
+                    <tr>
+                      <td colSpan={isAdmin ? 7 : 6}>
+                        {search.trim() ? "No data" : "검색어를 입력하면 품목 목록이 표시됩니다."}
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
 
         <section className="panel">
@@ -1004,39 +1125,72 @@ export default function HomePage() {
 
       <section className="panel">
         <h2>최근 이력</h2>
-        <div className="historyWrap">
-          <table className="historyTable">
-            <thead>
-              <tr>
-                <th>Type</th>
-                <th>Item No</th>
-                <th>Designation</th>
-                <th>Qty</th>
-                <th>Memo</th>
-                <th>Date</th>
-                <th>사용자</th>
-              </tr>
-            </thead>
-            <tbody>
-              {txHistory.map((tx) => (
-                <tr key={tx.id}>
-                  <td>{tx.tx_type}</td>
-                  <td>{tx.parts?.item_number || "-"}</td>
-                  <td>{tx.parts?.designation || "-"}</td>
-                  <td>{tx.qty}</td>
-                  <td>{tx.memo || "-"}</td>
-                  <td>{new Date(tx.created_at).toLocaleDateString("ko-KR")}</td>
-                  <td>{tx.actor_name || "-"}</td>
-                </tr>
-              ))}
-              {!loading && txHistory.length === 0 ? (
+        {isMobileLayout ? (
+          <div className="historyCards">
+            {txHistory.map((tx) => (
+              <article key={tx.id} className="dataCard">
+                <div className="dataCardHead">
+                  <strong>{tx.parts?.item_number || "-"}</strong>
+                  <span>{tx.tx_type}</span>
+                </div>
+                <div>{tx.parts?.designation || "-"}</div>
+                <div className="kvGrid">
+                  <div>
+                    <span className="meta">수량</span>
+                    <div>{tx.qty}</div>
+                  </div>
+                  <div>
+                    <span className="meta">날짜</span>
+                    <div>{new Date(tx.created_at).toLocaleDateString("ko-KR")}</div>
+                  </div>
+                  <div>
+                    <span className="meta">메모</span>
+                    <div>{tx.memo || "-"}</div>
+                  </div>
+                  <div>
+                    <span className="meta">사용자</span>
+                    <div>{tx.actor_name || "-"}</div>
+                  </div>
+                </div>
+              </article>
+            ))}
+            {!loading && txHistory.length === 0 ? <div className="panelNotice">No transactions</div> : null}
+          </div>
+        ) : (
+          <div className="historyWrap">
+            <table className="historyTable">
+              <thead>
                 <tr>
-                  <td colSpan={7}>No transactions</td>
+                  <th>Type</th>
+                  <th>Item No</th>
+                  <th>Designation</th>
+                  <th>Qty</th>
+                  <th>Memo</th>
+                  <th>Date</th>
+                  <th>사용자</th>
                 </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {txHistory.map((tx) => (
+                  <tr key={tx.id}>
+                    <td>{tx.tx_type}</td>
+                    <td>{tx.parts?.item_number || "-"}</td>
+                    <td>{tx.parts?.designation || "-"}</td>
+                    <td>{tx.qty}</td>
+                    <td>{tx.memo || "-"}</td>
+                    <td>{new Date(tx.created_at).toLocaleDateString("ko-KR")}</td>
+                    <td>{tx.actor_name || "-"}</td>
+                  </tr>
+                ))}
+                {!loading && txHistory.length === 0 ? (
+                  <tr>
+                    <td colSpan={7}>No transactions</td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
       {scannerOpen ? (
@@ -1047,6 +1201,9 @@ export default function HomePage() {
               <button className="btn secondary small" type="button" onClick={() => setScannerOpen(false)}>
                 닫기
               </button>
+            </div>
+            <div className="scannerGuide">
+              {isMobileLayout ? "모바일: 바코드를 10~20cm 거리에서 천천히 맞춰주세요." : "PC: 카메라 앞 바코드를 중앙에 고정해주세요."}
             </div>
             <video ref={scannerVideoRef} className="scannerVideo" muted playsInline />
             <div className="meta" style={{ marginTop: 8 }}>
