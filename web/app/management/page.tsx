@@ -64,6 +64,7 @@ export default function HomePage() {
   const [partsSort, setPartsSort] = useState<"item" | "stockAsc" | "stockDesc" | "designation">("item");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [successToast, setSuccessToast] = useState<string | null>(null);
 
   const [txForm, setTxForm] = useState<TxForm>({
     itemNumber: "",
@@ -91,6 +92,7 @@ export default function HomePage() {
   const [scannerError, setScannerError] = useState<string | null>(null);
   const [scannerStatus, setScannerStatus] = useState<string>("카메라를 준비합니다...");
   const [isMobileLayout, setIsMobileLayout] = useState(false);
+  const [scannerPendingValue, setScannerPendingValue] = useState<string | null>(null);
   const [scannerTorchSupported, setScannerTorchSupported] = useState(false);
   const [scannerTorchOn, setScannerTorchOn] = useState(false);
   const scannerVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -98,6 +100,7 @@ export default function HomePage() {
   const scannerControlsRef = useRef<{ stop: () => void } | null>(null);
   const scannerCloseTimerRef = useRef<number | null>(null);
   const scannerLastAcceptedRef = useRef<{ value: string; at: number } | null>(null);
+  const scannerPendingValueRef = useRef<string | null>(null);
 
   const isAdmin = authRole === "admin";
   const deferredSearchInput = useDeferredValue(searchInput);
@@ -122,6 +125,10 @@ export default function HomePage() {
     }
     setScannerTorchOn(false);
     setScannerTorchSupported(false);
+  }
+
+  function showSuccessToast(message: string) {
+    setSuccessToast(message);
   }
 
   function triggerScannerSuccessFeedback() {
@@ -305,6 +312,16 @@ export default function HomePage() {
   }, [deferredSearchInput]);
 
   useEffect(() => {
+    scannerPendingValueRef.current = scannerPendingValue;
+  }, [scannerPendingValue]);
+
+  useEffect(() => {
+    if (!successToast) return;
+    const timer = window.setTimeout(() => setSuccessToast(null), 2200);
+    return () => window.clearTimeout(timer);
+  }, [successToast]);
+
+  useEffect(() => {
     if (!isMobileLayout) {
       setTxToolsOpen(true);
     }
@@ -350,6 +367,7 @@ export default function HomePage() {
     if (!scannerOpen) {
       setScannerError(null);
       setScannerStatus("카메라를 준비합니다...");
+      setScannerPendingValue(null);
       stopScannerResources();
       return;
     }
@@ -389,16 +407,9 @@ export default function HomePage() {
         }
         scannerLastAcceptedRef.current = { value: scanned, at: now };
         triggerScannerSuccessFeedback();
-        if (scannerTarget === "tx") {
-          setTxForm((v) => ({ ...v, itemNumber: scanned }));
-        } else {
-          setPartForm((v) => ({ ...v, itemNumber: scanned }));
-        }
-        setScannerStatus(`인식됨: ${raw}`);
-        if (scannerCloseTimerRef.current) {
-          window.clearTimeout(scannerCloseTimerRef.current);
-        }
-        scannerCloseTimerRef.current = window.setTimeout(() => setScannerOpen(false), 180);
+        setScannerPendingValue(scanned);
+        setScannerStatus(`인식됨(확인 필요): ${raw}`);
+        stopScannerResources();
       };
 
       const startZxingFallback = async (status = "호환 모드로 카메라를 시작합니다...") => {
@@ -459,6 +470,7 @@ export default function HomePage() {
           let lastScanAt = 0;
           const scanLoop = async () => {
             if (cancelled || !scannerOpen) return;
+            if (scannerPendingValueRef.current) return;
 
             if (document.visibilityState === "hidden" || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
               scanTimerId = window.setTimeout(scanLoop, nativeScanIntervalMs);
@@ -569,6 +581,7 @@ export default function HomePage() {
   function saveGlobalMinimumStock() {
     try {
       window.localStorage.setItem(GLOBAL_MIN_STOCK_KEY, globalMinimumStock || "0");
+      showSuccessToast(`최소 재고 기준 저장 완료 (${globalMinimumStock || "0"})`);
     } catch {
       // ignore localStorage errors
     }
@@ -695,13 +708,33 @@ export default function HomePage() {
     }
 
     setTxForm({ itemNumber: "", txType: "IN", qty: "", memo: "" });
+    showSuccessToast(`${txForm.txType === "IN" ? "입고" : "출고"} 처리 완료`);
     await loadData();
   }
 
   function openScanner(target: "tx" | "part") {
     setScannerError(null);
+    setScannerPendingValue(null);
     setScannerTarget(target);
     setScannerOpen(true);
+  }
+
+  function applyScannerPendingValue() {
+    if (!scannerPendingValue) return;
+    if (scannerTarget === "tx") {
+      setTxForm((v) => ({ ...v, itemNumber: scannerPendingValue }));
+    } else {
+      setPartForm((v) => ({ ...v, itemNumber: scannerPendingValue }));
+    }
+    setScannerOpen(false);
+  }
+
+  function rescanScannerValue() {
+    setScannerPendingValue(null);
+    setScannerError(null);
+    setScannerStatus("바코드를 다시 스캔해주세요.");
+    setScannerOpen(false);
+    window.setTimeout(() => setScannerOpen(true), 60);
   }
 
   function editPart(part: Part) {
@@ -767,6 +800,7 @@ export default function HomePage() {
         return;
       }
       resetPartForm();
+      showSuccessToast(partForm.id ? "품목 수정 완료" : "품목 등록 완료");
       await loadData();
     } catch (e) {
       setError(e instanceof Error ? e.message : "품목 저장에 실패했습니다.");
@@ -802,6 +836,7 @@ export default function HomePage() {
       if (partForm.id === part.id) {
         resetPartForm();
       }
+      showSuccessToast("품목 삭제 완료");
       await loadData();
     } catch (e) {
       setError(e instanceof Error ? e.message : "품목 삭제에 실패했습니다.");
@@ -942,6 +977,12 @@ export default function HomePage() {
         <section className="panel" style={{ marginBottom: 16, borderColor: "#e7b4b4" }}>
           <strong>Error:</strong> {error}
         </section>
+      ) : null}
+
+      {successToast ? (
+        <div className="toast success" role="status" aria-live="polite">
+          {successToast}
+        </div>
       ) : null}
 
       <div className="grid">
@@ -1372,6 +1413,20 @@ export default function HomePage() {
             <div className="meta" style={{ marginTop: 4 }}>
               손전등: {scannerTorchSupported ? "지원됨" : "미지원/확인중"}
             </div>
+            {scannerPendingValue ? (
+              <div className="scannerConfirmBox" role="group" aria-label="스캔 결과 확인">
+                <div className="meta">인식값 확인</div>
+                <div className="scannerConfirmValue">{scannerPendingValue}</div>
+                <div className="actions">
+                  <button className="btn" type="button" onClick={applyScannerPendingValue}>
+                    적용
+                  </button>
+                  <button className="btn secondary" type="button" onClick={rescanScannerValue}>
+                    재스캔
+                  </button>
+                </div>
+              </div>
+            ) : null}
             {scannerError ? (
               <div className="meta" style={{ marginTop: 6 }}>
                 지원 브라우저에서 사용하거나 파트 번호를 직접 입력하세요.
