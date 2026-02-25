@@ -165,6 +165,10 @@ export default function HomePage() {
   }
 
   async function toggleScannerTorch() {
+    if (!scannerTorchSupported) {
+      setScannerError("이 기기/브라우저는 손전등 제어를 지원하지 않습니다.");
+      return;
+    }
     const next = !scannerTorchOn;
     const video = scannerVideoRef.current;
     const stream = (video?.srcObject as MediaStream | null) ?? scannerStreamRef.current;
@@ -1347,11 +1351,9 @@ export default function HomePage() {
             <div className="adminHeaderRow" style={{ marginBottom: 8 }}>
               <h2 style={{ margin: 0 }}>바코드 스캔</h2>
               <div className="actions">
-                {scannerTorchSupported ? (
-                  <button className="btn secondary small" type="button" onClick={() => void toggleScannerTorch()}>
-                    {scannerTorchOn ? "손전등 끄기" : "손전등 켜기"}
-                  </button>
-                ) : null}
+                <button className="btn secondary small" type="button" onClick={() => void toggleScannerTorch()}>
+                  {scannerTorchSupported ? (scannerTorchOn ? "손전등 끄기" : "손전등 켜기") : "손전등(미지원)"}
+                </button>
                 <button className="btn secondary small" type="button" onClick={() => setScannerOpen(false)}>
                   닫기
                 </button>
@@ -1366,6 +1368,9 @@ export default function HomePage() {
             </div>
             <div className="meta" style={{ marginTop: 8 }}>
               {(scannerTarget === "part" ? "[품목 등록] " : "[입출고] ") + (scannerError || scannerStatus)}
+            </div>
+            <div className="meta" style={{ marginTop: 4 }}>
+              손전등: {scannerTorchSupported ? "지원됨" : "미지원/확인중"}
             </div>
             {scannerError ? (
               <div className="meta" style={{ marginTop: 6 }}>
