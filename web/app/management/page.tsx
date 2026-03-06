@@ -1042,7 +1042,7 @@ export default function HomePage() {
                     <th>Item No</th>
                     <th>Designation</th>
                     <th>Stock</th>
-                    <th>Min</th>
+                    {minimumStockLabel ? <th>Min</th> : null}
                     <th>Unit</th>
                     <th>Location</th>
                     {isAdmin ? <th>Actions</th> : null}
@@ -1056,7 +1056,7 @@ export default function HomePage() {
                         <td>{part.item_number}</td>
                         <td>{part.designation}</td>
                         <td className={isLow ? "low" : undefined}>{part.current_stock}</td>
-                        <td>{minimumStockLabel || "-"}</td>
+                        {minimumStockLabel ? <td>{minimumStockLabel}</td> : null}
                         <td>{part.unit_of_quantity || "-"}</td>
                         <td>{part.location || "-"}</td>
                         {isAdmin ? (
@@ -1084,7 +1084,7 @@ export default function HomePage() {
                   })}
                   {!loading && filteredParts.length === 0 ? (
                     <tr>
-                      <td colSpan={isAdmin ? 7 : 6}>
+                      <td colSpan={isAdmin ? (minimumStockLabel ? 7 : 6) : (minimumStockLabel ? 6 : 5)}>
                         {search.trim() ? "No data" : "검색어를 입력하면 품목 목록이 표시됩니다."}
                       </td>
                     </tr>
