@@ -843,8 +843,10 @@ export default function HomePage() {
     }
   }
 
+  const minimumStockValue = Number(globalMinimumStock || 0);
+  const minimumStockLabel = minimumStockValue > 0 ? String(minimumStockValue) : null;
   const lowCount = parts.filter(
-    (part) => Number(part.current_stock) <= Number(globalMinimumStock || 0),
+    (part) => Number(part.current_stock) <= minimumStockValue,
   ).length;
   const inboundRegisteredCount = parts.filter((part) => Number(part.current_stock) > 0).length;
 
@@ -992,13 +994,14 @@ export default function HomePage() {
           {isMobileLayout ? (
             <div className="partsCards">
               {filteredParts.map((part) => {
-                const isLow = Number(part.current_stock) <= Number(globalMinimumStock || 0);
+                const isLow = Number(part.current_stock) <= minimumStockValue;
                 return (
                   <article key={part.id} className="dataCard">
                     <div className="dataCardHead">
                       <strong>{part.item_number}</strong>
                       <span className={isLow ? "low" : undefined}>
-                        재고 {part.current_stock} / 최소 {globalMinimumStock || "0"}
+                        재고 {part.current_stock}
+                        {minimumStockLabel ? ` / 최소 ${minimumStockLabel}` : ""}
                       </span>
                     </div>
                     <div className="meta">{part.designation}</div>
@@ -1047,13 +1050,13 @@ export default function HomePage() {
                 </thead>
                 <tbody>
                   {filteredParts.map((part) => {
-                    const isLow = Number(part.current_stock) <= Number(globalMinimumStock || 0);
+                    const isLow = Number(part.current_stock) <= minimumStockValue;
                     return (
                       <tr key={part.id}>
                         <td>{part.item_number}</td>
                         <td>{part.designation}</td>
                         <td className={isLow ? "low" : undefined}>{part.current_stock}</td>
-                        <td>{globalMinimumStock || "0"}</td>
+                        <td>{minimumStockLabel || "-"}</td>
                         <td>{part.unit_of_quantity || "-"}</td>
                         <td>{part.location || "-"}</td>
                         {isAdmin ? (
