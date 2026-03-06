@@ -1054,13 +1054,13 @@ export default function HomePage() {
               <table>
                 <thead>
                   <tr>
-                    <th>Item No</th>
-                    <th>Designation</th>
-                    <th>Stock</th>
-                    {minimumStockLabel ? <th>Min</th> : null}
-                    <th>Unit</th>
-                    <th>Equipment</th>
-                    <th>Location</th>
+                    <th>파트번호</th>
+                    <th>부품명</th>
+                    <th>수량</th>
+                    {minimumStockLabel ? <th>최소</th> : null}
+                    <th>단위</th>
+                    <th>설비</th>
+                    <th>파트위치</th>
                     {isAdmin ? <th>Actions</th> : null}
                   </tr>
                 </thead>
@@ -1399,12 +1399,12 @@ export default function HomePage() {
             <table className="historyTable">
               <thead>
                 <tr>
-                  <th>Type</th>
-                  <th>Item No</th>
-                  <th>Designation</th>
-                  <th>Qty</th>
-                  <th>Memo</th>
-                  <th>Date</th>
+                  <th>구분</th>
+                  <th>파트번호</th>
+                  <th>부품명</th>
+                  <th>수량</th>
+                  <th>메모</th>
+                  <th>일시</th>
                   <th>사용자</th>
                 </tr>
               </thead>
