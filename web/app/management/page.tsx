@@ -875,13 +875,13 @@ export default function HomePage() {
           <h1 className="title">6호기 파트 관리 프로그램</h1>
         </div>
         <div className="meta">
-          {loading ? "Loading..." : `IN Registered ${inboundRegisteredCount} / Low stock ${lowCount}`}
+          {loading ? "Loading..." : `입고 등록된 품목 ${inboundRegisteredCount} / 부족 재고 ${lowCount}`}
         </div>
       </header>
 
       <section className="statsGrid" aria-label="요약 정보">
         <div className="statCard">
-          <div className="meta">입고 등록 품목</div>
+          <div className="meta">입고 등록된 품목</div>
           <div className="statValue">{inboundRegisteredCount}</div>
         </div>
         <div className="statCard">
