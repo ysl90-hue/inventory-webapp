@@ -846,6 +846,7 @@ export default function HomePage() {
   const lowCount = parts.filter(
     (part) => Number(part.current_stock) <= Number(globalMinimumStock || 0),
   ).length;
+  const inboundRegisteredCount = parts.filter((part) => Number(part.current_stock) > 0).length;
 
   if (!authChecked || !session) {
     return (
@@ -874,14 +875,14 @@ export default function HomePage() {
           <h1 className="title">6호기 파트 관리 프로그램</h1>
         </div>
         <div className="meta">
-          {loading ? "Loading..." : `Total ${parts.length} / Low stock ${lowCount}`}
+          {loading ? "Loading..." : `IN Registered ${inboundRegisteredCount} / Low stock ${lowCount}`}
         </div>
       </header>
 
       <section className="statsGrid" aria-label="요약 정보">
         <div className="statCard">
-          <div className="meta">전체 품목</div>
-          <div className="statValue">{parts.length}</div>
+          <div className="meta">입고 등록 품목</div>
+          <div className="statValue">{inboundRegisteredCount}</div>
         </div>
         <div className="statCard">
           <div className="meta">부족 재고</div>
