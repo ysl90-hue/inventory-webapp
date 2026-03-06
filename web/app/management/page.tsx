@@ -21,6 +21,7 @@ type PartForm = {
   unitOfQuantity: string;
   currentStock: string;
   minimumStock: string;
+  equipment: string;
   location: string;
 };
 
@@ -32,22 +33,28 @@ const EMPTY_PART_FORM: PartForm = {
   unitOfQuantity: "",
   currentStock: "0",
   minimumStock: "0",
+  equipment: "",
   location: "",
 };
 
-function parseLocation(location: string | null | undefined) {
-  const raw = (location || "").trim();
+function parseEquipment(equipment: string | null | undefined) {
+  const raw = (equipment || "").trim();
   if (!raw) return "";
   if (raw.toUpperCase().includes("BLOWER")) return "BLOWER";
   if (raw.toUpperCase().includes("FILLER")) return "FILLER";
   return raw.toUpperCase();
 }
 
-function buildLocation(location: string) {
-  const normalized = location.trim().toUpperCase();
+function buildEquipment(equipment: string) {
+  const normalized = equipment.trim().toUpperCase();
   if (normalized === "FILLER" || normalized === "BLOWER") {
     return normalized;
   }
+  return normalized || null;
+}
+
+function buildPartLocation(location: string) {
+  const normalized = location.trim().toUpperCase();
   return normalized || null;
 }
 
@@ -550,7 +557,9 @@ export default function HomePage() {
     const filtered = parts.filter((part) => {
       const hit =
         part.item_number.toLowerCase().includes(keyword) ||
-        part.designation.toLowerCase().includes(keyword);
+        part.designation.toLowerCase().includes(keyword) ||
+        (part.location || "").toLowerCase().includes(keyword) ||
+        (part.position || "").toLowerCase().includes(keyword);
       const low = Number(part.current_stock) <= globalMin;
       return hit && (!showLowOnly || low);
     });
@@ -746,7 +755,8 @@ export default function HomePage() {
       unitOfQuantity: part.unit_of_quantity || "",
       currentStock: String(part.current_stock ?? 0),
       minimumStock: String(part.minimum_stock ?? 0),
-      location: parseLocation(part.location),
+      equipment: parseEquipment(part.location),
+      location: part.position || "",
     });
     setError(null);
   }
@@ -773,7 +783,8 @@ export default function HomePage() {
       unit_of_quantity: partForm.unitOfQuantity || null,
       current_stock: Number(partForm.currentStock || 0),
       minimum_stock: Number(globalMinimumStock || 0),
-      location: buildLocation(partForm.location),
+      location: buildEquipment(partForm.equipment),
+      position: buildPartLocation(partForm.location),
     };
 
     if (!payload.item_number || !payload.designation) {
@@ -1011,8 +1022,12 @@ export default function HomePage() {
                         <div>{part.unit_of_quantity || "-"}</div>
                       </div>
                       <div>
-                        <span className="meta">위치</span>
+                        <span className="meta">설비</span>
                         <div>{part.location || "-"}</div>
+                      </div>
+                      <div>
+                        <span className="meta">위치</span>
+                        <div>{part.position || "-"}</div>
                       </div>
                     </div>
                     {isAdmin ? (
@@ -1044,6 +1059,7 @@ export default function HomePage() {
                     <th>Stock</th>
                     {minimumStockLabel ? <th>Min</th> : null}
                     <th>Unit</th>
+                    <th>Equipment</th>
                     <th>Location</th>
                     {isAdmin ? <th>Actions</th> : null}
                   </tr>
@@ -1059,6 +1075,7 @@ export default function HomePage() {
                         {minimumStockLabel ? <td>{minimumStockLabel}</td> : null}
                         <td>{part.unit_of_quantity || "-"}</td>
                         <td>{part.location || "-"}</td>
+                        <td>{part.position || "-"}</td>
                         {isAdmin ? (
                           <td>
                             <div className="actions">
@@ -1084,7 +1101,7 @@ export default function HomePage() {
                   })}
                   {!loading && filteredParts.length === 0 ? (
                     <tr>
-                      <td colSpan={isAdmin ? (minimumStockLabel ? 7 : 6) : (minimumStockLabel ? 6 : 5)}>
+                      <td colSpan={isAdmin ? (minimumStockLabel ? 8 : 7) : (minimumStockLabel ? 7 : 6)}>
                         {search.trim() ? "No data" : "검색어를 입력하면 품목 목록이 표시됩니다."}
                       </td>
                     </tr>
@@ -1191,6 +1208,30 @@ export default function HomePage() {
                             setPartForm((v) => ({ ...v, unitOfQuantity: e.target.value }))
                           }
                           placeholder="EA"
+                        />
+                      </div>
+                      <div className="formRow">
+                        <label className="label">equipment (설비)</label>
+                        <input
+                          className="input"
+                          autoComplete="off"
+                          value={partForm.equipment}
+                          onChange={(e) =>
+                            setPartForm((v) => ({ ...v, equipment: e.target.value.toUpperCase() }))
+                          }
+                          placeholder="FILLER / BLOWER"
+                        />
+                      </div>
+                      <div className="formRow">
+                        <label className="label">location (파트 위치)</label>
+                        <input
+                          className="input"
+                          autoComplete="off"
+                          value={partForm.location}
+                          onChange={(e) =>
+                            setPartForm((v) => ({ ...v, location: e.target.value.toUpperCase() }))
+                          }
+                          placeholder="RACK-A1 / LINE-2"
                         />
                       </div>
                       <div className="formRow">
