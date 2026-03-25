@@ -60,10 +60,11 @@ $$;
 alter table public.profiles enable row level security;
 
 drop policy if exists "profiles read self or admin" on public.profiles;
-create policy "profiles read self or admin"
+drop policy if exists "profiles read all authenticated" on public.profiles;
+create policy "profiles read all authenticated"
 on public.profiles for select
 to authenticated
-using (id = auth.uid() or public.is_admin());
+using (true);
 
 drop policy if exists "profiles insert self" on public.profiles;
 create policy "profiles insert self"

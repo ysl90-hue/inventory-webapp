@@ -4,6 +4,7 @@ import { FormEvent, useDeferredValue, useEffect, useMemo, useRef, useState } fro
 import { useRouter } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
+import { canUseCurrentSession, clearCurrentSessionMarker, getShouldKeepLogin } from "@/lib/auth-session";
 import { normalizeCategory, normalizeUnit, UNIT_OPTIONS } from "@/lib/inventory";
 import type { Part, PartCategory, StockTransaction } from "@/lib/types";
 
@@ -71,7 +72,6 @@ function isPartLow(part: Part, minimumStockValue: number) {
 }
 
 export default function ManagementPage() {
-  const KEEP_LOGIN_KEY = "inventory_keep_login";
   const GLOBAL_MIN_STOCK_KEY = "inventory_global_min_stock";
   const router = useRouter();
   const [supabase] = useState(() => createClient());
@@ -310,9 +310,11 @@ export default function ManagementPage() {
       if (!mounted) return;
       clearTimeout(timer);
       try {
-        const shouldKeepLogin = window.localStorage.getItem(KEEP_LOGIN_KEY) !== "false";
-        if (!shouldKeepLogin && data.session) {
+        const shouldKeepLogin = getShouldKeepLogin();
+        const allowCurrentSession = canUseCurrentSession();
+        if (!shouldKeepLogin && data.session && !allowCurrentSession) {
           void supabase.auth.signOut({ scope: "local" });
+          clearCurrentSessionMarker();
           setSession(null);
         } else {
           setSession(data.session ?? null);
@@ -636,6 +638,7 @@ export default function ManagementPage() {
   async function signOut() {
     setError(null);
     await supabase.auth.signOut({ scope: "local" });
+    clearCurrentSessionMarker();
     setAuthRole(null);
     setAuthDisplayName(null);
   }

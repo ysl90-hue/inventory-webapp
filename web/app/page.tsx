@@ -4,10 +4,17 @@ import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
+import {
+  canUseCurrentSession,
+  clearCurrentSessionMarker,
+  CURRENT_SESSION_KEY,
+  getShouldKeepLogin,
+  KEEP_LOGIN_KEY,
+  markCurrentSessionActive,
+} from "@/lib/auth-session";
 
 export default function LoginPage() {
   const SAVED_EMAIL_KEY = "inventory_saved_login_email";
-  const KEEP_LOGIN_KEY = "inventory_keep_login";
   const router = useRouter();
   const [supabase] = useState(() => createClient());
   const [session, setSession] = useState<Session | null>(null);
@@ -34,11 +41,12 @@ export default function LoginPage() {
       if (!mounted) return;
       clearTimeout(timer);
       try {
-        const savedKeepLogin = window.localStorage.getItem(KEEP_LOGIN_KEY);
-        const shouldKeepLogin = savedKeepLogin !== "false";
+        const shouldKeepLogin = getShouldKeepLogin();
         setKeepLogin(shouldKeepLogin);
-        if (!shouldKeepLogin && data.session) {
+        const allowCurrentSession = canUseCurrentSession();
+        if (!shouldKeepLogin && data.session && !allowCurrentSession) {
           void supabase.auth.signOut({ scope: "local" });
+          clearCurrentSessionMarker();
           setSession(null);
         } else {
           setSession(data.session ?? null);
@@ -54,6 +62,11 @@ export default function LoginPage() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       clearTimeout(timer);
+      if (nextSession) {
+        markCurrentSessionActive();
+      } else {
+        clearCurrentSessionMarker();
+      }
       setSession(nextSession);
       setAuthChecked(true);
       setAuthCheckTimedOut(false);
@@ -118,6 +131,9 @@ export default function LoginPage() {
       } else if (data.access_token && data.refresh_token) {
         try {
           window.localStorage.setItem(KEEP_LOGIN_KEY, keepLogin ? "true" : "false");
+          if (keepLogin) {
+            window.sessionStorage.removeItem(CURRENT_SESSION_KEY);
+          }
           if (rememberEmail && email.trim()) {
             window.localStorage.setItem(SAVED_EMAIL_KEY, email.trim());
           } else {
@@ -133,6 +149,7 @@ export default function LoginPage() {
         if (setSessionError) {
           setError(`세션 저장 실패: ${setSessionError.message}`);
         } else {
+          markCurrentSessionActive();
           router.replace("/management");
         }
       } else {
@@ -169,6 +186,9 @@ export default function LoginPage() {
       } else if (data.session?.access_token && data.session?.refresh_token) {
         try {
           window.localStorage.setItem(KEEP_LOGIN_KEY, keepLogin ? "true" : "false");
+          if (keepLogin) {
+            window.sessionStorage.removeItem(CURRENT_SESSION_KEY);
+          }
         } catch {
           // ignore localStorage errors
         }
@@ -179,6 +199,7 @@ export default function LoginPage() {
         if (setSessionError) {
           setError(`회원가입 후 세션 저장 실패: ${setSessionError.message}`);
         } else {
+          markCurrentSessionActive();
           alert("아이디 생성이 완료되었습니다.");
           router.replace("/management");
         }
