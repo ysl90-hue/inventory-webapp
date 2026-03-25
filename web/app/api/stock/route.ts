@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseRest, supabaseRestAsUser } from "@/lib/supabase/rest";
+import { parseBooleanFlag, stockTransactionErrorMessage } from "@/lib/inventory";
 
 export const runtime = "nodejs";
 
@@ -14,12 +15,14 @@ export async function POST(req: NextRequest) {
       txType?: "IN" | "OUT";
       qty?: number;
       memo?: string | null;
+      isBGrade?: boolean;
     };
 
     const itemNumber = body.itemNumber?.trim();
     const txType = body.txType;
     const qty = Number(body.qty);
     const memo = body.memo?.trim() || null;
+    const isBGrade = parseBooleanFlag(body.isBGrade);
 
     if (!itemNumber || (txType !== "IN" && txType !== "OUT") || !Number.isFinite(qty) || qty <= 0) {
       return NextResponse.json({ error: "Invalid request" }, { status: 400 });
@@ -32,6 +35,7 @@ export async function POST(req: NextRequest) {
         p_tx_type: txType,
         p_qty: qty,
         p_memo: memo,
+        p_is_b_grade: isBGrade,
       }),
     };
     const res = bearerToken
@@ -39,7 +43,7 @@ export async function POST(req: NextRequest) {
       : await supabaseRest("/rpc/apply_stock_transaction", rpcInit);
     const text = await res.text();
     if (!res.ok) {
-      return NextResponse.json({ error: text }, { status: res.status });
+      return NextResponse.json({ error: stockTransactionErrorMessage(text) }, { status: res.status });
     }
 
     return NextResponse.json({ ok: true });

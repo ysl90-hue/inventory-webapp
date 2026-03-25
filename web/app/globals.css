@@ -149,9 +149,33 @@ a {
 
 .statsGrid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 14px;
+}
+
+.tabNav {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.tabButton {
+  height: 42px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 253, 250, 0.8);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tabButton.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: transparent;
 }
 
 .statCard {
@@ -364,6 +388,40 @@ th {
   font-size: 0.9rem;
 }
 
+.badgeRow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.softBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #d5ddd9;
+  background: #f4f8f6;
+  color: #35554f;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.softBadge.warn {
+  background: #fff1f1;
+  color: #9a1f1f;
+  border-color: #efc7c7;
+}
+
+.categoryChips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
 .adminHeaderRow {
   display: flex;
   align-items: center;
@@ -514,6 +572,10 @@ th {
 
   .grid {
     grid-template-columns: 1fr;
+  }
+
+  .statsGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .header {

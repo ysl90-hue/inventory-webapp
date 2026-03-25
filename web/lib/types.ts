@@ -9,6 +9,7 @@ export type Part = {
   current_stock: number;
   minimum_stock: number;
   location: string | null;
+  is_b_grade: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -20,10 +21,21 @@ export type StockTransaction = {
   tx_type: "IN" | "OUT" | "ADJUST";
   qty: number;
   memo: string | null;
+  is_b_grade: boolean;
   created_at: string;
   actor_name?: string | null;
   parts?: {
+    id?: string;
     item_number: string;
     designation: string;
+    current_stock?: number;
+    location?: string | null;
+    is_b_grade?: boolean;
   } | null;
+};
+
+export type PartCategory = {
+  id: string;
+  name: string;
+  created_at: string;
 };

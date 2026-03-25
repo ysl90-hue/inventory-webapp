@@ -14,9 +14,12 @@ create table if not exists public.parts (
   current_stock numeric(12, 2) not null default 0,
   minimum_stock numeric(12, 2) not null default 0,
   location text,
+  is_b_grade boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.parts add column if not exists is_b_grade boolean not null default false;
 
 create index if not exists idx_parts_item_number on public.parts(item_number);
 create index if not exists idx_parts_designation on public.parts(designation);
@@ -28,9 +31,21 @@ create table if not exists public.stock_transactions (
   tx_type text not null check (tx_type in ('IN', 'OUT', 'ADJUST')),
   qty numeric(12, 2) not null check (qty > 0),
   memo text,
+  is_b_grade boolean not null default false,
   created_by uuid references auth.users(id),
   created_at timestamptz not null default now()
 );
+
+alter table public.stock_transactions add column if not exists is_b_grade boolean not null default false;
+
+create table if not exists public.part_categories (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  created_by uuid references auth.users(id),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_part_categories_name on public.part_categories(name);
 
 create index if not exists idx_stock_transactions_part_id_created_at
   on public.stock_transactions(part_id, created_at desc);
@@ -51,12 +66,15 @@ before update on public.parts
 for each row
 execute function public.set_updated_at();
 
+drop function if exists public.apply_stock_transaction(text, text, numeric, text);
+
 -- Atomic stock update + transaction log
 create or replace function public.apply_stock_transaction(
   p_item_number text,
   p_tx_type text,
   p_qty numeric,
-  p_memo text default null
+  p_memo text default null,
+  p_is_b_grade boolean default false
 )
 returns public.parts
 language plpgsql
@@ -103,12 +121,13 @@ begin
   returning * into v_part;
 
   insert into public.stock_transactions (
-    part_id, tx_type, qty, memo, created_by
+    part_id, tx_type, qty, memo, is_b_grade, created_by
   ) values (
     v_part.id,
     p_tx_type,
     case when p_tx_type = 'ADJUST' then abs(v_new_stock) else p_qty end,
     p_memo,
+    coalesce(p_is_b_grade, false),
     auth.uid()
   );
 
@@ -118,6 +137,7 @@ $$;
 
 alter table public.parts enable row level security;
 alter table public.stock_transactions enable row level security;
+alter table public.part_categories enable row level security;
 
 -- Basic policies (adjust to your auth strategy)
 drop policy if exists "parts read" on public.parts;
@@ -145,5 +165,11 @@ on public.stock_transactions for insert
 to anon, authenticated
 with check (true);
 
-grant execute on function public.apply_stock_transaction(text, text, numeric, text)
+grant execute on function public.apply_stock_transaction(text, text, numeric, text, boolean)
 to anon, authenticated;
+
+drop policy if exists "part categories read" on public.part_categories;
+create policy "part categories read"
+on public.part_categories for select
+to anon, authenticated
+using (true);

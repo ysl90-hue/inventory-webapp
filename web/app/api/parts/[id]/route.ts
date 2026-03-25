@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseRestAsUser } from "@/lib/supabase/rest";
 import { requireAdmin } from "@/lib/server-auth";
+import { normalizeCategory, normalizeText, normalizeUnit, parseBooleanFlag } from "@/lib/inventory";
 
 export const runtime = "nodejs";
 
@@ -14,6 +15,7 @@ type PartPatchPayload = {
   current_stock?: number;
   minimum_stock?: number;
   location?: string | null;
+  is_b_grade?: boolean;
 };
 
 function normalizePatchPayload(input: PartPatchPayload) {
@@ -25,15 +27,16 @@ function normalizePatchPayload(input: PartPatchPayload) {
   }
 
   return {
-    position: input.position?.trim() || null,
+    position: normalizeCategory(input.position),
     item_number: itemNumber,
     designation,
     quantity: Number.isFinite(Number(input.quantity)) ? Number(input.quantity) : 0,
-    unit_of_quantity: input.unit_of_quantity?.trim() || null,
-    spare_parts_identifier: input.spare_parts_identifier?.trim() || null,
+    unit_of_quantity: normalizeUnit(input.unit_of_quantity),
+    spare_parts_identifier: normalizeText(input.spare_parts_identifier),
     current_stock: Number.isFinite(Number(input.current_stock)) ? Number(input.current_stock) : 0,
     minimum_stock: Number.isFinite(Number(input.minimum_stock)) ? Number(input.minimum_stock) : 0,
-    location: input.location?.trim() || null,
+    location: normalizeCategory(input.location),
+    is_b_grade: parseBooleanFlag(input.is_b_grade),
   };
 }
 

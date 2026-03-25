@@ -4,13 +4,17 @@ import { FormEvent, useDeferredValue, useEffect, useMemo, useRef, useState } fro
 import { useRouter } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
-import type { Part, StockTransaction } from "@/lib/types";
+import { normalizeCategory, normalizeUnit, UNIT_OPTIONS } from "@/lib/inventory";
+import type { Part, PartCategory, StockTransaction } from "@/lib/types";
+
+type ActiveTab = "search" | "stock" | "admin";
 
 type TxForm = {
   itemNumber: string;
   txType: "IN" | "OUT";
   qty: string;
   memo: string;
+  isBGrade: boolean;
 };
 
 type PartForm = {
@@ -21,8 +25,27 @@ type PartForm = {
   unitOfQuantity: string;
   currentStock: string;
   minimumStock: string;
-  equipment: string;
-  location: string;
+  category: string;
+  position: string;
+  isBGrade: boolean;
+};
+
+type TxEditForm = {
+  id: string;
+  itemNumber: string;
+  designation: string;
+  txType: "IN" | "OUT";
+  qty: string;
+  memo: string;
+  isBGrade: boolean;
+};
+
+const EMPTY_TX_FORM: TxForm = {
+  itemNumber: "",
+  txType: "IN",
+  qty: "",
+  memo: "",
+  isBGrade: false,
 };
 
 const EMPTY_PART_FORM: PartForm = {
@@ -30,40 +53,30 @@ const EMPTY_PART_FORM: PartForm = {
   itemNumber: "",
   designation: "",
   quantity: "0",
-  unitOfQuantity: "",
+  unitOfQuantity: "EA",
   currentStock: "0",
   minimumStock: "0",
-  equipment: "",
-  location: "",
+  category: "",
+  position: "",
+  isBGrade: false,
 };
 
-function parseEquipment(equipment: string | null | undefined) {
-  const raw = (equipment || "").trim();
-  if (!raw) return "";
-  if (raw.toUpperCase().includes("BLOWER")) return "BLOWER";
-  if (raw.toUpperCase().includes("FILLER")) return "FILLER";
-  return raw.toUpperCase();
-}
-
-function buildEquipment(equipment: string) {
-  const normalized = equipment.trim().toUpperCase();
-  if (normalized === "FILLER" || normalized === "BLOWER") {
-    return normalized;
-  }
+function buildPartPosition(position: string) {
+  const normalized = position.trim().toUpperCase();
   return normalized || null;
 }
 
-function buildPartLocation(location: string) {
-  const normalized = location.trim().toUpperCase();
-  return normalized || null;
+function isPartLow(part: Part, minimumStockValue: number) {
+  return Number(part.current_stock) <= minimumStockValue;
 }
 
-export default function HomePage() {
+export default function ManagementPage() {
   const KEEP_LOGIN_KEY = "inventory_keep_login";
   const GLOBAL_MIN_STOCK_KEY = "inventory_global_min_stock";
   const router = useRouter();
   const [supabase] = useState(() => createClient());
   const [parts, setParts] = useState<Part[]>([]);
+  const [categories, setCategories] = useState<PartCategory[]>([]);
   const [txHistory, setTxHistory] = useState<StockTransaction[]>([]);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -72,32 +85,27 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successToast, setSuccessToast] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<ActiveTab>("search");
+  const [stockModalOpen, setStockModalOpen] = useState(false);
 
-  const [txForm, setTxForm] = useState<TxForm>({
-    itemNumber: "",
-    txType: "IN",
-    qty: "",
-    memo: "",
-  });
+  const [txForm, setTxForm] = useState<TxForm>(EMPTY_TX_FORM);
   const [partForm, setPartForm] = useState<PartForm>(EMPTY_PART_FORM);
   const [savingPart, setSavingPart] = useState(false);
+  const [savingTxEdit, setSavingTxEdit] = useState(false);
+  const [newCategory, setNewCategory] = useState("");
+  const [savingCategory, setSavingCategory] = useState(false);
+  const [txEditForm, setTxEditForm] = useState<TxEditForm | null>(null);
 
   const [session, setSession] = useState<Session | null>(null);
-  const [authEmail, setAuthEmail] = useState("");
-  const [authDisplayNameInput, setAuthDisplayNameInput] = useState("");
-  const [authPassword, setAuthPassword] = useState("");
-  const [authLoading, setAuthLoading] = useState(false);
   const [authRole, setAuthRole] = useState<"user" | "admin" | null>(null);
   const [authDisplayName, setAuthDisplayName] = useState<string | null>(null);
-  const [adminToolsOpen, setAdminToolsOpen] = useState(false);
-  const [txToolsOpen, setTxToolsOpen] = useState(true);
   const [globalMinimumStock, setGlobalMinimumStock] = useState("0");
   const [authChecked, setAuthChecked] = useState(false);
   const [authCheckTimedOut, setAuthCheckTimedOut] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerTarget, setScannerTarget] = useState<"tx" | "part">("tx");
   const [scannerError, setScannerError] = useState<string | null>(null);
-  const [scannerStatus, setScannerStatus] = useState<string>("카메라를 준비합니다...");
+  const [scannerStatus, setScannerStatus] = useState("카메라를 준비합니다...");
   const [isMobileLayout, setIsMobileLayout] = useState(false);
   const [scannerPendingValue, setScannerPendingValue] = useState<string | null>(null);
   const [scannerTorchSupported, setScannerTorchSupported] = useState(false);
@@ -111,6 +119,8 @@ export default function HomePage() {
 
   const isAdmin = authRole === "admin";
   const deferredSearchInput = useDeferredValue(searchInput);
+  const minimumStockValue = Number(globalMinimumStock || 0);
+  const minimumStockLabel = minimumStockValue > 0 ? String(minimumStockValue) : null;
 
   function stopScannerResources() {
     if (scannerCloseTimerRef.current) {
@@ -148,7 +158,8 @@ export default function HomePage() {
     }
 
     try {
-      const AudioContextCtor = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      const AudioContextCtor =
+        window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!AudioContextCtor) return;
       const ctx = new AudioContextCtor();
       const osc = ctx.createOscillator();
@@ -214,30 +225,71 @@ export default function HomePage() {
     setError(null);
 
     try {
-      const [partsRes, txRes] = await Promise.all([
+      const [partsRes, txRes, categoriesRes] = await Promise.all([
         fetch("/api/parts", { cache: "no-store" }),
         fetch("/api/transactions", {
           cache: "no-store",
-          headers: session?.access_token
-            ? { Authorization: `Bearer ${session.access_token}` }
-            : undefined,
+          headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
         }),
+        fetch("/api/categories", { cache: "no-store" }),
       ]);
 
       const partsJson = (await partsRes.json()) as { data?: Part[]; error?: string };
       const txJson = (await txRes.json()) as { data?: StockTransaction[]; error?: string };
+      const categoriesJson = (await categoriesRes.json()) as { data?: PartCategory[]; error?: string };
 
-      if (!partsRes.ok || !txRes.ok) {
-        setError(partsJson.error || txJson.error || "Failed to load data");
+      if (!partsRes.ok || !txRes.ok || !categoriesRes.ok) {
+        setError(partsJson.error || txJson.error || categoriesJson.error || "Failed to load data");
       } else {
         setParts(partsJson.data || []);
         setTxHistory(txJson.data || []);
+        setCategories(categoriesJson.data || []);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load data");
     }
 
     setLoading(false);
+  }
+
+  async function createCategory(name: string) {
+    if (!session?.access_token) {
+      throw new Error("관리자 로그인 후 사용하세요.");
+    }
+
+    const normalized = normalizeCategory(name);
+    if (!normalized) {
+      throw new Error("구분명을 입력하세요.");
+    }
+
+    const exists = categories.some((category) => category.name === normalized);
+    if (exists) {
+      return normalized;
+    }
+
+    const res = await fetch("/api/categories", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ name: normalized }),
+    });
+    const json = (await res.json()) as { error?: string; data?: PartCategory[] };
+    if (!res.ok) {
+      throw new Error(json.error || "구분 저장에 실패했습니다.");
+    }
+    setCategories((prev) => {
+      const next = [...prev];
+      for (const item of json.data || []) {
+        if (!next.some((category) => category.id === item.id || category.name === item.name)) {
+          next.push(item);
+        }
+      }
+      next.sort((a, b) => a.name.localeCompare(b.name));
+      return next;
+    });
+    return normalized;
   }
 
   useEffect(() => {
@@ -295,15 +347,6 @@ export default function HomePage() {
   }, [authChecked, session, router]);
 
   useEffect(() => {
-    if (authChecked && !session) {
-      const forceRedirect = setTimeout(() => {
-        window.location.replace("/");
-      }, 800);
-      return () => clearTimeout(forceRedirect);
-    }
-  }, [authChecked, session]);
-
-  useEffect(() => {
     const mq = window.matchMedia("(max-width: 900px)");
     const apply = () => setIsMobileLayout(mq.matches);
     apply();
@@ -329,12 +372,6 @@ export default function HomePage() {
   }, [successToast]);
 
   useEffect(() => {
-    if (!isMobileLayout) {
-      setTxToolsOpen(true);
-    }
-  }, [isMobileLayout]);
-
-  useEffect(() => {
     async function loadMe() {
       if (!session?.access_token) {
         setAuthRole(null);
@@ -348,7 +385,6 @@ export default function HomePage() {
         });
         const json = (await res.json()) as {
           data?: { role: "user" | "admin"; email: string | null; displayName?: string | null };
-          error?: string;
         };
 
         if (!res.ok) {
@@ -427,23 +463,19 @@ export default function HomePage() {
             decodeFromConstraints: (
               constraints: MediaStreamConstraints,
               previewElem: HTMLVideoElement,
-              callbackFn: (result: { getText: () => string } | null, error?: unknown) => void,
+              callbackFn: (result: { getText: () => string } | null) => void,
             ) => Promise<{ stop: () => void }>;
           };
         };
         const reader = new zxing.BrowserMultiFormatReader();
-        const controls = await reader.decodeFromConstraints(
-          { video: videoConstraints, audio: false },
-          video,
-          (result) => {
-            if (cancelled || !result) return;
-            const raw = result.getText().trim();
-            if (!raw) return;
-            applyScannedValue(raw);
-            scannerControlsRef.current?.stop();
-            scannerControlsRef.current = null;
-          },
-        );
+        const controls = await reader.decodeFromConstraints({ video: videoConstraints, audio: false }, video, (result) => {
+          if (cancelled || !result) return;
+          const raw = result.getText().trim();
+          if (!raw) return;
+          applyScannedValue(raw);
+          scannerControlsRef.current?.stop();
+          scannerControlsRef.current = null;
+        });
         if (cancelled) {
           controls.stop();
           return;
@@ -550,33 +582,35 @@ export default function HomePage() {
 
   const filteredParts = useMemo(() => {
     const keyword = search.trim().toLowerCase();
-    if (keyword.length === 0) {
-      return [];
-    }
-    const globalMin = Number(globalMinimumStock || 0);
     const filtered = parts.filter((part) => {
       const hit =
+        keyword.length === 0 ||
         part.item_number.toLowerCase().includes(keyword) ||
         part.designation.toLowerCase().includes(keyword) ||
         (part.location || "").toLowerCase().includes(keyword) ||
-        (part.position || "").toLowerCase().includes(keyword);
-      const low = Number(part.current_stock) <= globalMin;
-      return hit && (!showLowOnly || low);
+        (part.position || "").toLowerCase().includes(keyword) ||
+        (part.is_b_grade ? "b급" : "").includes(keyword);
+      return hit && (!showLowOnly || isPartLow(part, minimumStockValue));
     });
+
     filtered.sort((a, b) => {
-      if (partsSort === "stockAsc") {
-        return Number(a.current_stock) - Number(b.current_stock);
-      }
-      if (partsSort === "stockDesc") {
-        return Number(b.current_stock) - Number(a.current_stock);
-      }
-      if (partsSort === "designation") {
-        return a.designation.localeCompare(b.designation);
-      }
+      if (partsSort === "stockAsc") return Number(a.current_stock) - Number(b.current_stock);
+      if (partsSort === "stockDesc") return Number(b.current_stock) - Number(a.current_stock);
+      if (partsSort === "designation") return a.designation.localeCompare(b.designation);
       return a.item_number.localeCompare(b.item_number);
     });
     return filtered;
-  }, [parts, search, showLowOnly, globalMinimumStock, partsSort]);
+  }, [minimumStockValue, parts, partsSort, search, showLowOnly]);
+
+  const inboundParts = useMemo(() => {
+    return [...parts]
+      .filter((part) => Number(part.current_stock) > 0)
+      .sort((a, b) => a.item_number.localeCompare(b.item_number));
+  }, [parts]);
+
+  const lowCount = parts.filter((part) => isPartLow(part, minimumStockValue)).length;
+  const inboundRegisteredCount = inboundParts.length;
+  const selectedPart = parts.find((part) => part.item_number === txForm.itemNumber.trim().toUpperCase()) || null;
 
   function submitSearch() {
     setSearch(searchInput.trim());
@@ -585,6 +619,7 @@ export default function HomePage() {
   function clearSearch() {
     setSearchInput("");
     setSearch("");
+    setShowLowOnly(false);
   }
 
   function saveGlobalMinimumStock() {
@@ -594,88 +629,6 @@ export default function HomePage() {
     } catch {
       // ignore localStorage errors
     }
-  }
-
-  async function signIn() {
-    setError(null);
-    setAuthLoading(true);
-    try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: authEmail.trim(),
-          password: authPassword,
-        }),
-      });
-      const { json, raw } = await readJsonOrText(res);
-      const data = (json || {}) as {
-        access_token?: string;
-        refresh_token?: string;
-        error?: string;
-        msg?: string;
-      };
-      if (!res.ok) {
-        setError(
-          `로그인 실패: ${data.error || data.msg || raw.slice(0, 120) || `HTTP ${res.status}`}`,
-        );
-      } else if (data.access_token && data.refresh_token) {
-        const { error: setSessionError } = await supabase.auth.setSession({
-          access_token: data.access_token,
-          refresh_token: data.refresh_token,
-        });
-        if (setSessionError) {
-          setError(`세션 저장 실패: ${setSessionError.message}`);
-        }
-      } else {
-        setError("로그인 응답에 세션 정보가 없습니다.");
-      }
-    } catch (e) {
-      setError(`로그인 실패: ${e instanceof Error ? e.message : "Network error"}`);
-    }
-    setAuthLoading(false);
-  }
-
-  async function signUp() {
-    setError(null);
-    setAuthLoading(true);
-    try {
-      const res = await fetch("/api/auth/signup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: authEmail.trim(),
-          password: authPassword,
-          displayName: authDisplayNameInput.trim(),
-        }),
-      });
-      const { json, raw } = await readJsonOrText(res);
-      const data = (json || {}) as {
-        user?: { id: string; email?: string | null } | null;
-        session?: { access_token: string; refresh_token: string } | null;
-        error?: string;
-        msg?: string;
-      };
-      if (!res.ok) {
-        setError(
-          `회원가입 실패: ${data.error || data.msg || raw.slice(0, 120) || `HTTP ${res.status}`}`,
-        );
-      } else if (data.session?.access_token && data.session?.refresh_token) {
-        const { error: setSessionError } = await supabase.auth.setSession({
-          access_token: data.session.access_token,
-          refresh_token: data.session.refresh_token,
-        });
-        if (setSessionError) {
-          setError(`회원가입 후 세션 저장 실패: ${setSessionError.message}`);
-        }
-        alert("아이디 생성이 완료되었습니다.");
-      } else {
-        alert("이메일 인증 해주세요.");
-      }
-    } catch (e) {
-      setError(`회원가입 실패: ${e instanceof Error ? e.message : "Network error"}`);
-    }
-    setAuthLoading(false);
   }
 
   async function signOut() {
@@ -707,6 +660,7 @@ export default function HomePage() {
         txType: txForm.txType,
         qty,
         memo: txForm.memo.trim() || null,
+        isBGrade: txForm.isBGrade,
       }),
     });
 
@@ -716,7 +670,7 @@ export default function HomePage() {
       return;
     }
 
-    setTxForm({ itemNumber: "", txType: "IN", qty: "", memo: "" });
+    setTxForm(EMPTY_TX_FORM);
     showSuccessToast(`${txForm.txType === "IN" ? "입고" : "출고"} 처리 완료`);
     await loadData();
   }
@@ -747,22 +701,39 @@ export default function HomePage() {
   }
 
   function editPart(part: Part) {
+    setActiveTab("admin");
     setPartForm({
       id: part.id,
       itemNumber: part.item_number,
       designation: part.designation,
       quantity: String(part.quantity ?? 0),
-      unitOfQuantity: part.unit_of_quantity || "",
+      unitOfQuantity: normalizeUnit(part.unit_of_quantity) || "EA",
       currentStock: String(part.current_stock ?? 0),
       minimumStock: String(part.minimum_stock ?? 0),
-      equipment: parseEquipment(part.location),
-      location: part.position || "",
+      category: part.location || "",
+      position: part.position || "",
+      isBGrade: Boolean(part.is_b_grade),
     });
     setError(null);
   }
 
   function resetPartForm() {
     setPartForm(EMPTY_PART_FORM);
+  }
+
+  async function submitCategory(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    setSavingCategory(true);
+    try {
+      const created = await createCategory(newCategory);
+      setNewCategory("");
+      showSuccessToast(`구분 저장 완료: ${created}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "구분 저장에 실패했습니다.");
+    } finally {
+      setSavingCategory(false);
+    }
   }
 
   async function submitPart(event: FormEvent<HTMLFormElement>) {
@@ -774,21 +745,38 @@ export default function HomePage() {
       return;
     }
 
+    const normalizedCategory = normalizeCategory(partForm.category);
+    if (normalizedCategory) {
+      try {
+        await createCategory(normalizedCategory);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "구분 저장에 실패했습니다.");
+        return;
+      }
+    }
+
     setSavingPart(true);
 
     const payload = {
       item_number: partForm.itemNumber.trim().toUpperCase(),
       designation: partForm.designation.trim(),
       quantity: Number(partForm.quantity || 0),
-      unit_of_quantity: partForm.unitOfQuantity || null,
+      unit_of_quantity: normalizeUnit(partForm.unitOfQuantity),
       current_stock: Number(partForm.currentStock || 0),
-      minimum_stock: Number(globalMinimumStock || 0),
-      location: buildEquipment(partForm.equipment),
-      position: buildPartLocation(partForm.location),
+      minimum_stock: Number(globalMinimumStock || partForm.minimumStock || 0),
+      location: normalizedCategory,
+      position: buildPartPosition(partForm.position),
+      is_b_grade: partForm.isBGrade,
     };
 
     if (!payload.item_number || !payload.designation) {
-      setError("품목 등록/수정에는 품목번호와 품명이 필요합니다.");
+      setError("품종 등록에는 품목번호와 품명이 필요합니다.");
+      setSavingPart(false);
+      return;
+    }
+
+    if (!payload.unit_of_quantity) {
+      setError("단위는 EA 또는 SET 중에서 선택하세요.");
       setSavingPart(false);
       return;
     }
@@ -807,14 +795,14 @@ export default function HomePage() {
       });
       const json = (await res.json()) as { error?: string };
       if (!res.ok) {
-        setError(json.error || "품목 저장에 실패했습니다.");
+        setError(json.error || "품종 저장에 실패했습니다.");
         return;
       }
       resetPartForm();
-      showSuccessToast(partForm.id ? "품목 수정 완료" : "품목 등록 완료");
+      showSuccessToast(partForm.id ? "품종 수정 완료" : "품종 등록 완료");
       await loadData();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "품목 저장에 실패했습니다.");
+      setError(e instanceof Error ? e.message : "품종 저장에 실패했습니다.");
     } finally {
       setSavingPart(false);
     }
@@ -827,7 +815,7 @@ export default function HomePage() {
     }
 
     const confirmed = window.confirm(
-      `${part.item_number} (${part.designation}) 품목을 삭제하시겠습니까?\n관련 이력도 함께 삭제될 수 있습니다.`,
+      `${part.item_number} (${part.designation}) 품종을 삭제하시겠습니까?\n관련 이력도 함께 삭제될 수 있습니다.`,
     );
     if (!confirmed) return;
 
@@ -841,25 +829,97 @@ export default function HomePage() {
       });
       const json = (await res.json()) as { error?: string };
       if (!res.ok) {
-        setError(json.error || "품목 삭제에 실패했습니다.");
+        setError(json.error || "품종 삭제에 실패했습니다.");
         return;
       }
       if (partForm.id === part.id) {
         resetPartForm();
       }
-      showSuccessToast("품목 삭제 완료");
+      showSuccessToast("품종 삭제 완료");
       await loadData();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "품목 삭제에 실패했습니다.");
+      setError(e instanceof Error ? e.message : "품종 삭제에 실패했습니다.");
     }
   }
 
-  const minimumStockValue = Number(globalMinimumStock || 0);
-  const minimumStockLabel = minimumStockValue > 0 ? String(minimumStockValue) : null;
-  const lowCount = parts.filter(
-    (part) => Number(part.current_stock) <= minimumStockValue,
-  ).length;
-  const inboundRegisteredCount = parts.filter((part) => Number(part.current_stock) > 0).length;
+  function startEditTransaction(tx: StockTransaction) {
+    if (!isAdmin || tx.tx_type === "ADJUST") return;
+    setTxEditForm({
+      id: tx.id,
+      itemNumber: tx.parts?.item_number || "-",
+      designation: tx.parts?.designation || "-",
+      txType: tx.tx_type,
+      qty: String(tx.qty),
+      memo: tx.memo || "",
+      isBGrade: Boolean(tx.is_b_grade),
+    });
+  }
+
+  async function submitTransactionEdit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!txEditForm || !session?.access_token) return;
+    setError(null);
+    setSavingTxEdit(true);
+
+    try {
+      const res = await fetch(`/api/transactions/${txEditForm.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          txType: txEditForm.txType,
+          qty: Number(txEditForm.qty),
+          memo: txEditForm.memo.trim() || null,
+          isBGrade: txEditForm.isBGrade,
+        }),
+      });
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        setError(json.error || "최근 이력 수정에 실패했습니다.");
+        return;
+      }
+      setTxEditForm(null);
+      showSuccessToast("최근 이력 수정 완료");
+      await loadData();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "최근 이력 수정에 실패했습니다.");
+    } finally {
+      setSavingTxEdit(false);
+    }
+  }
+
+  async function deleteTransaction(tx: StockTransaction) {
+    if (!session?.access_token) {
+      setError("관리자 로그인 후 사용하세요.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `${tx.parts?.item_number || "-"} / ${tx.tx_type} / ${tx.qty} 이력을 삭제하시겠습니까?`,
+    );
+    if (!confirmed) return;
+
+    setError(null);
+    try {
+      const res = await fetch(`/api/transactions/${tx.id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        setError(json.error || "최근 이력 삭제에 실패했습니다.");
+        return;
+      }
+      showSuccessToast("최근 이력 삭제 완료");
+      await loadData();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "최근 이력 삭제에 실패했습니다.");
+    }
+  }
 
   if (!authChecked || !session) {
     return (
@@ -867,15 +927,8 @@ export default function HomePage() {
         <section className="panel">
           <h2>로그인 확인 중...</h2>
           <p className="meta">
-            {authCheckTimedOut
-              ? "세션 확인이 지연되어 로그인 화면으로 이동합니다."
-              : "매니지먼트 화면 접근을 확인하고 있습니다."}
+            {authCheckTimedOut ? "세션 확인이 지연되어 로그인 화면으로 이동합니다." : "매니지먼트 화면 접근을 확인하고 있습니다."}
           </p>
-          <div className="actions" style={{ marginTop: 10 }}>
-            <button className="btn secondary" type="button" onClick={() => window.location.replace("/")}>
-              로그인 화면으로 이동
-            </button>
-          </div>
         </section>
       </main>
     );
@@ -887,9 +940,7 @@ export default function HomePage() {
         <div>
           <h1 className="title">6호기 파트 관리 프로그램</h1>
         </div>
-        <div className="meta">
-          {loading ? "Loading..." : `입고 등록된 품목 ${inboundRegisteredCount} / 부족 재고 ${lowCount}`}
-        </div>
+        <div className="meta">{loading ? "Loading..." : `입고 등록 ${inboundRegisteredCount} / 부족 재고 ${lowCount}`}</div>
       </header>
 
       <section className="statsGrid" aria-label="요약 정보">
@@ -902,19 +953,27 @@ export default function HomePage() {
           <div className={`statValue ${lowCount > 0 ? "low" : ""}`}>{lowCount}</div>
         </div>
         <div className="statCard">
+          <div className="meta">등록된 구분</div>
+          <div className="statValue">{categories.length}</div>
+        </div>
+        <div className="statCard">
           <div className="meta">레이아웃</div>
           <div className="statValue">{isMobileLayout ? "Mobile" : "Desktop"}</div>
         </div>
       </section>
 
       <section className="panel" style={{ marginBottom: 14 }}>
-        <h2>계정</h2>
-        <div className="authBox" style={{ border: "none", padding: 0, background: "transparent" }}>
-          <div className="authRow">
-            <div className="meta">
-              {authDisplayName || session.user.email?.split("@")[0] || "Logged in"} {"·"}{" "}
-              <strong>{isAdmin ? "ADMIN" : "USER"}</strong>
-            </div>
+        <div className="authRow" style={{ justifyContent: "space-between" }}>
+          <div className="meta">
+            {authDisplayName || session.user.email?.split("@")[0] || "Logged in"} {"·"} <strong>{isAdmin ? "ADMIN" : "USER"}</strong>
+          </div>
+          <div className="actions">
+            <button className="btn secondary small" type="button" onClick={() => setStockModalOpen(true)}>
+              입고 전체 보기
+            </button>
+            <button className="btn secondary small" type="button" onClick={() => void loadData()}>
+              새로고침
+            </button>
             <button className="btn secondary small" type="button" onClick={() => void signOut()}>
               로그아웃
             </button>
@@ -922,67 +981,16 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="toolbarPanel panel" aria-label="검색 및 필터">
-        <div className="toolbarSearch">
-          <input
-            className="input"
-            placeholder="Search item_number / designation"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                submitSearch();
-              }
-            }}
-          />
-          <button className="btn" type="button" onClick={submitSearch}>
+      <section className="panel" style={{ marginBottom: 14 }}>
+        <div className="tabNav" role="tablist" aria-label="관리 탭">
+          <button className={`tabButton ${activeTab === "search" ? "active" : ""}`} type="button" onClick={() => setActiveTab("search")}>
             검색
           </button>
-        </div>
-        <div className="filterChips" aria-label="정렬">
-          <button
-            className={`btn secondary small ${partsSort === "item" ? "activeChoice" : ""}`}
-            type="button"
-            onClick={() => setPartsSort("item")}
-          >
-            품목번호순
+          <button className={`tabButton ${activeTab === "stock" ? "active" : ""}`} type="button" onClick={() => setActiveTab("stock")}>
+            입출고 처리
           </button>
-          <button
-            className={`btn secondary small ${partsSort === "designation" ? "activeChoice" : ""}`}
-            type="button"
-            onClick={() => setPartsSort("designation")}
-          >
-            품명순
-          </button>
-          <button
-            className={`btn secondary small ${partsSort === "stockAsc" ? "activeChoice" : ""}`}
-            type="button"
-            onClick={() => setPartsSort("stockAsc")}
-          >
-            재고낮은순
-          </button>
-          <button
-            className={`btn secondary small ${partsSort === "stockDesc" ? "activeChoice" : ""}`}
-            type="button"
-            onClick={() => setPartsSort("stockDesc")}
-          >
-            재고높은순
-          </button>
-        </div>
-        <div className="toolbarActions">
-          <button
-            className={`btn ${showLowOnly ? "" : "secondary"}`}
-            type="button"
-            onClick={() => setShowLowOnly((v) => !v)}
-          >
-            {showLowOnly ? "Low Stock Only" : "Show All"}
-          </button>
-          <button className="btn secondary" type="button" onClick={clearSearch}>
-            검색초기화
-          </button>
-          <button className="btn secondary" type="button" onClick={() => void loadData()}>
-            Refresh
+          <button className={`tabButton ${activeTab === "admin" ? "active" : ""}`} type="button" onClick={() => setActiveTab("admin")}>
+            관리자도구
           </button>
         </div>
       </section>
@@ -999,437 +1007,606 @@ export default function HomePage() {
         </div>
       ) : null}
 
-      <div className="grid">
-        <section className="panel">
-          <h2>Parts</h2>
-          {isMobileLayout ? (
-            <div className="partsCards">
-              {filteredParts.map((part) => {
-                const isLow = Number(part.current_stock) <= minimumStockValue;
-                return (
-                  <article key={part.id} className="dataCard">
-                    <div className="dataCardHead">
-                      <strong>{part.item_number}</strong>
-                      <span className={isLow ? "low" : undefined}>
-                        재고 {part.current_stock}
-                        {minimumStockLabel ? ` / 최소 ${minimumStockLabel}` : ""}
-                      </span>
-                    </div>
-                    <div className="meta">{part.designation}</div>
-                    <div className="kvGrid">
-                      <div>
-                        <span className="meta">단위</span>
-                        <div>{part.unit_of_quantity || "-"}</div>
-                      </div>
-                      <div>
-                        <span className="meta">설비</span>
-                        <div>{part.location || "-"}</div>
-                      </div>
-                      <div>
-                        <span className="meta">위치</span>
-                        <div>{part.position || "-"}</div>
-                      </div>
-                    </div>
-                    {isAdmin ? (
-                      <div className="actions" style={{ marginTop: 10 }}>
-                        <button className="btn secondary small" type="button" onClick={() => editPart(part)}>
-                          Edit
-                        </button>
-                        <button className="btn danger small" type="button" onClick={() => void deletePart(part)}>
-                          Delete
-                        </button>
-                      </div>
-                    ) : null}
-                  </article>
-                );
-              })}
-              {!loading && filteredParts.length === 0 ? (
-                <div className="panelNotice">
-                  {search.trim() ? "No data" : "검색어를 입력하면 품목 목록이 표시됩니다."}
-                </div>
-              ) : null}
+      {activeTab === "search" ? (
+        <>
+          <section className="toolbarPanel panel" aria-label="검색 및 필터">
+            <div className="toolbarSearch">
+              <input
+                className="input"
+                placeholder="품목번호 / 품명 / 구분 / 위치 검색"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    submitSearch();
+                  }
+                }}
+              />
+              <button className="btn" type="button" onClick={submitSearch}>
+                검색
+              </button>
             </div>
-          ) : (
-            <div style={{ overflowX: "auto" }}>
-              <table>
-                <thead>
-                  <tr>
-                    <th>파트번호</th>
-                    <th>부품명</th>
-                    <th>수량</th>
-                    {minimumStockLabel ? <th>최소</th> : null}
-                    <th>단위</th>
-                    <th>설비</th>
-                    <th>파트위치</th>
-                    {isAdmin ? <th>Actions</th> : null}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredParts.map((part) => {
-                    const isLow = Number(part.current_stock) <= minimumStockValue;
-                    return (
+            <div className="filterChips" aria-label="정렬">
+              <button className={`btn secondary small ${partsSort === "item" ? "activeChoice" : ""}`} type="button" onClick={() => setPartsSort("item")}>
+                품목번호순
+              </button>
+              <button
+                className={`btn secondary small ${partsSort === "designation" ? "activeChoice" : ""}`}
+                type="button"
+                onClick={() => setPartsSort("designation")}
+              >
+                품명순
+              </button>
+              <button className={`btn secondary small ${partsSort === "stockAsc" ? "activeChoice" : ""}`} type="button" onClick={() => setPartsSort("stockAsc")}>
+                재고낮은순
+              </button>
+              <button className={`btn secondary small ${partsSort === "stockDesc" ? "activeChoice" : ""}`} type="button" onClick={() => setPartsSort("stockDesc")}>
+                재고높은순
+              </button>
+            </div>
+            <div className="toolbarActions">
+              <button className={`btn ${showLowOnly ? "" : "secondary"}`} type="button" onClick={() => setShowLowOnly((v) => !v)}>
+                {showLowOnly ? "부족 재고만" : "전체 보기"}
+              </button>
+              <button className="btn secondary" type="button" onClick={clearSearch}>
+                검색초기화
+              </button>
+              <button className="btn secondary" type="button" onClick={() => setStockModalOpen(true)}>
+                입고 전체 팝업
+              </button>
+            </div>
+          </section>
+
+          <section className="panel">
+            <div className="adminHeaderRow">
+              <h2 style={{ margin: 0 }}>검색 결과</h2>
+              <div className="meta">{filteredParts.length}건</div>
+            </div>
+            {isMobileLayout ? (
+              <div className="partsCards">
+                {filteredParts.map((part) => {
+                  const low = isPartLow(part, minimumStockValue);
+                  return (
+                    <article key={part.id} className="dataCard">
+                      <div className="dataCardHead">
+                        <strong>{part.item_number}</strong>
+                        <span className={low ? "low" : undefined}>재고 {part.current_stock}</span>
+                      </div>
+                      <div>{part.designation}</div>
+                      <div className="badgeRow">
+                        <span className="softBadge">{part.location || "구분 없음"}</span>
+                        <span className={`softBadge ${part.is_b_grade ? "warn" : ""}`}>{part.is_b_grade ? "B급" : "일반"}</span>
+                        <span className="softBadge">{part.unit_of_quantity || "-"}</span>
+                      </div>
+                      <div className="kvGrid">
+                        <div>
+                          <span className="meta">위치</span>
+                          <div>{part.position || "-"}</div>
+                        </div>
+                        <div>
+                          <span className="meta">최소재고</span>
+                          <div>{minimumStockLabel || part.minimum_stock || "-"}</div>
+                        </div>
+                      </div>
+                      {isAdmin ? (
+                        <div className="actions" style={{ marginTop: 10 }}>
+                          <button className="btn secondary small" type="button" onClick={() => editPart(part)}>
+                            수정
+                          </button>
+                          <button className="btn danger small" type="button" onClick={() => void deletePart(part)}>
+                            삭제
+                          </button>
+                        </div>
+                      ) : null}
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <div style={{ overflowX: "auto" }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>품목번호</th>
+                      <th>품명</th>
+                      <th>구분</th>
+                      <th>B급</th>
+                      <th>재고</th>
+                      <th>단위</th>
+                      <th>위치</th>
+                      {isAdmin ? <th>관리</th> : null}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredParts.map((part) => (
                       <tr key={part.id}>
                         <td>{part.item_number}</td>
                         <td>{part.designation}</td>
-                        <td className={isLow ? "low" : undefined}>{part.current_stock}</td>
-                        {minimumStockLabel ? <td>{minimumStockLabel}</td> : null}
-                        <td>{part.unit_of_quantity || "-"}</td>
                         <td>{part.location || "-"}</td>
+                        <td>{part.is_b_grade ? "B급" : "-"}</td>
+                        <td className={isPartLow(part, minimumStockValue) ? "low" : undefined}>{part.current_stock}</td>
+                        <td>{part.unit_of_quantity || "-"}</td>
                         <td>{part.position || "-"}</td>
                         {isAdmin ? (
                           <td>
                             <div className="actions">
-                              <button
-                                className="btn secondary small"
-                                type="button"
-                                onClick={() => editPart(part)}
-                              >
-                                Edit
+                              <button className="btn secondary small" type="button" onClick={() => editPart(part)}>
+                                수정
                               </button>
-                              <button
-                                className="btn danger small"
-                                type="button"
-                                onClick={() => void deletePart(part)}
-                              >
-                                Delete
+                              <button className="btn danger small" type="button" onClick={() => void deletePart(part)}>
+                                삭제
                               </button>
                             </div>
                           </td>
                         ) : null}
                       </tr>
-                    );
-                  })}
-                  {!loading && filteredParts.length === 0 ? (
+                    ))}
+                    {!loading && filteredParts.length === 0 ? (
+                      <tr>
+                        <td colSpan={isAdmin ? 8 : 7}>검색 결과가 없습니다.</td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        </>
+      ) : null}
+
+      {activeTab === "stock" ? (
+        <div className="grid">
+          <section className="panel">
+            <h2>입출고 처리</h2>
+            <form onSubmit={submitTx}>
+              <div className="formRow">
+                <label className="label">품목번호</label>
+                <input
+                  className="input"
+                  autoComplete="off"
+                  value={txForm.itemNumber}
+                  onChange={(e) => setTxForm((v) => ({ ...v, itemNumber: e.target.value.toUpperCase() }))}
+                  placeholder="등록된 품목번호 입력"
+                />
+                <div className="actions" style={{ marginTop: 8 }}>
+                  <button className="btn secondary small" type="button" onClick={() => openScanner("tx")}>
+                    바코드 스캔
+                  </button>
+                </div>
+                <div className="meta">
+                  {selectedPart ? `${selectedPart.designation} / 구분 ${selectedPart.location || "-"} / 현재재고 ${selectedPart.current_stock}` : "미등록 품목은 저장되지 않습니다."}
+                </div>
+              </div>
+
+              <div className="formRow">
+                <label className="label">구분</label>
+                <select className="select" value={txForm.txType} onChange={(e) => setTxForm((v) => ({ ...v, txType: e.target.value as "IN" | "OUT" }))}>
+                  <option value="IN">입고 (IN)</option>
+                  <option value="OUT">출고 (OUT)</option>
+                </select>
+              </div>
+
+              <div className="formRow">
+                <label className="label">수량</label>
+                <input
+                  className="input"
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.01"
+                  autoComplete="off"
+                  value={txForm.qty}
+                  onChange={(e) => setTxForm((v) => ({ ...v, qty: e.target.value }))}
+                />
+              </div>
+
+              <div className="formRow">
+                <label className="label">메모</label>
+                <input
+                  className="input"
+                  autoComplete="off"
+                  value={txForm.memo}
+                  onChange={(e) => setTxForm((v) => ({ ...v, memo: e.target.value }))}
+                  placeholder="선택 입력"
+                />
+              </div>
+
+              <label className="checkRow" style={{ marginBottom: 12 }}>
+                <input type="checkbox" checked={txForm.isBGrade} onChange={(e) => setTxForm((v) => ({ ...v, isBGrade: e.target.checked }))} />
+                B급
+              </label>
+
+              <div className={`actions ${isMobileLayout ? "stickyActionBar" : ""}`}>
+                <button className="btn" type="submit">
+                  저장
+                </button>
+                <button className="btn secondary" type="button" onClick={() => setTxForm(EMPTY_TX_FORM)}>
+                  초기화
+                </button>
+              </div>
+            </form>
+          </section>
+
+          <section className="panel">
+            <div className="adminHeaderRow">
+              <h2 style={{ margin: 0 }}>최근 이력</h2>
+              <div className="meta">최근 20건</div>
+            </div>
+            {isMobileLayout ? (
+              <div className="historyCards">
+                {txHistory.map((tx) => (
+                  <article key={tx.id} className="dataCard">
+                    <div className="dataCardHead">
+                      <strong>{tx.parts?.item_number || "-"}</strong>
+                      <span className={`txBadge ${tx.tx_type === "OUT" ? "out" : "in"}`}>{tx.tx_type}</span>
+                    </div>
+                    <div>{tx.parts?.designation || "-"}</div>
+                    <div className="badgeRow">
+                      {tx.is_b_grade ? <span className="softBadge warn">B급</span> : null}
+                      <span className="softBadge">{tx.parts?.location || "구분 없음"}</span>
+                    </div>
+                    <div className="kvGrid">
+                      <div>
+                        <span className="meta">수량</span>
+                        <div>{tx.qty}</div>
+                      </div>
+                      <div>
+                        <span className="meta">날짜</span>
+                        <div>{new Date(tx.created_at).toLocaleString("ko-KR")}</div>
+                      </div>
+                      <div>
+                        <span className="meta">메모</span>
+                        <div>{tx.memo || "-"}</div>
+                      </div>
+                      <div>
+                        <span className="meta">사용자</span>
+                        <div>{tx.actor_name || "-"}</div>
+                      </div>
+                    </div>
+                    {isAdmin && tx.tx_type !== "ADJUST" ? (
+                      <div className="actions" style={{ marginTop: 10 }}>
+                        <button className="btn secondary small" type="button" onClick={() => startEditTransaction(tx)}>
+                          수정
+                        </button>
+                        <button className="btn danger small" type="button" onClick={() => void deleteTransaction(tx)}>
+                          삭제
+                        </button>
+                      </div>
+                    ) : null}
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="historyWrap">
+                <table className="historyTable">
+                  <thead>
                     <tr>
-                      <td colSpan={isAdmin ? (minimumStockLabel ? 8 : 7) : (minimumStockLabel ? 7 : 6)}>
-                        {search.trim() ? "No data" : "검색어를 입력하면 품목 목록이 표시됩니다."}
-                      </td>
+                      <th>구분</th>
+                      <th>품목번호</th>
+                      <th>품명</th>
+                      <th>카테고리</th>
+                      <th>B급</th>
+                      <th>수량</th>
+                      <th>메모</th>
+                      <th>일시</th>
+                      <th>사용자</th>
+                      {isAdmin ? <th>관리</th> : null}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {txHistory.map((tx) => (
+                      <tr key={tx.id}>
+                        <td>
+                          <span className={`txBadge ${tx.tx_type === "OUT" ? "out" : "in"}`}>{tx.tx_type}</span>
+                        </td>
+                        <td>{tx.parts?.item_number || "-"}</td>
+                        <td>{tx.parts?.designation || "-"}</td>
+                        <td>{tx.parts?.location || "-"}</td>
+                        <td>{tx.is_b_grade ? "B급" : "-"}</td>
+                        <td>{tx.qty}</td>
+                        <td>{tx.memo || "-"}</td>
+                        <td>{new Date(tx.created_at).toLocaleString("ko-KR")}</td>
+                        <td>{tx.actor_name || "-"}</td>
+                        {isAdmin ? (
+                          <td>
+                            {tx.tx_type === "ADJUST" ? (
+                              <span className="meta">보정 이력</span>
+                            ) : (
+                              <div className="actions">
+                                <button className="btn secondary small" type="button" onClick={() => startEditTransaction(tx)}>
+                                  수정
+                                </button>
+                                <button className="btn danger small" type="button" onClick={() => void deleteTransaction(tx)}>
+                                  삭제
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        ) : null}
+                      </tr>
+                    ))}
+                    {!loading && txHistory.length === 0 ? (
+                      <tr>
+                        <td colSpan={isAdmin ? 10 : 9}>최근 이력이 없습니다.</td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        </div>
+      ) : null}
+
+      {activeTab === "admin" ? (
+        isAdmin ? (
+          <div className="grid">
+            <section className="panel">
+              <div className="adminBlock">
+                <h2>구분 관리</h2>
+                <form onSubmit={submitCategory}>
+                  <div className="formRow">
+                    <label className="label">새 구분 추가</label>
+                    <div className="actions">
+                      <input className="input" autoComplete="off" value={newCategory} onChange={(e) => setNewCategory(e.target.value.toUpperCase())} placeholder="예: FILLER / BLOWER / CAP" />
+                      <button className="btn secondary" type="submit" disabled={savingCategory}>
+                        {savingCategory ? "저장 중..." : "구분 저장"}
+                      </button>
+                    </div>
+                  </div>
+                </form>
+                <div className="categoryChips">
+                  {categories.map((category) => (
+                    <span key={category.id} className="softBadge">
+                      {category.name}
+                    </span>
+                  ))}
+                  {categories.length === 0 ? <span className="meta">등록된 구분이 없습니다.</span> : null}
+                </div>
+              </div>
+
+              <div className="adminBlock">
+                <div className="formRow" style={{ marginBottom: 14 }}>
+                  <label className="label">global minimum stock (전 제품 공통)</label>
+                  <div className="actions">
+                    <input
+                      className="input"
+                      type="number"
+                      inputMode="decimal"
+                      autoComplete="off"
+                      step="0.01"
+                      value={globalMinimumStock}
+                      onChange={(e) => setGlobalMinimumStock(e.target.value)}
+                      style={{ width: isMobileLayout ? "100%" : 180 }}
+                    />
+                    <button className="btn secondary small" type="button" onClick={saveGlobalMinimumStock}>
+                      기준 저장
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="panel">
+              <h2>{partForm.id ? "품종 수정" : "품종 등록"}</h2>
+              <form onSubmit={submitPart}>
+                <div className="formGrid">
+                  <div className="formRow">
+                    <label className="label">품목번호</label>
+                    <input
+                      className="input"
+                      autoComplete="off"
+                      value={partForm.itemNumber}
+                      onChange={(e) => setPartForm((v) => ({ ...v, itemNumber: e.target.value.toUpperCase() }))}
+                      placeholder="item number"
+                    />
+                    <div className="actions" style={{ marginTop: 8 }}>
+                      <button className="btn secondary small" type="button" onClick={() => openScanner("part")}>
+                        바코드 스캔
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="formRow">
+                    <label className="label">품명</label>
+                    <input className="input" autoComplete="off" value={partForm.designation} onChange={(e) => setPartForm((v) => ({ ...v, designation: e.target.value }))} placeholder="designation" />
+                  </div>
+
+                  <div className="formRow">
+                    <label className="label">현재 재고</label>
+                    <input
+                      className="input"
+                      type="number"
+                      inputMode="decimal"
+                      autoComplete="off"
+                      step="0.01"
+                      value={partForm.currentStock}
+                      onChange={(e) => setPartForm((v) => ({ ...v, currentStock: e.target.value }))}
+                    />
+                  </div>
+
+                  <div className="formRow">
+                    <label className="label">단위</label>
+                    <select className="select" value={partForm.unitOfQuantity} onChange={(e) => setPartForm((v) => ({ ...v, unitOfQuantity: e.target.value }))}>
+                      {UNIT_OPTIONS.map((unit) => (
+                        <option key={unit} value={unit}>
+                          {unit.toLowerCase()}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="formRow">
+                    <label className="label">구분</label>
+                    <input
+                      className="input"
+                      list="part-category-options"
+                      autoComplete="off"
+                      value={partForm.category}
+                      onChange={(e) => setPartForm((v) => ({ ...v, category: e.target.value.toUpperCase() }))}
+                      placeholder="목록 선택 또는 직접입력"
+                    />
+                    <datalist id="part-category-options">
+                      {categories.map((category) => (
+                        <option key={category.id} value={category.name} />
+                      ))}
+                    </datalist>
+                  </div>
+
+                  <div className="formRow">
+                    <label className="label">파트 위치</label>
+                    <input
+                      className="input"
+                      autoComplete="off"
+                      value={partForm.position}
+                      onChange={(e) => setPartForm((v) => ({ ...v, position: e.target.value.toUpperCase() }))}
+                      placeholder="RACK-A1 / LINE-2"
+                    />
+                  </div>
+
+                  <div className="formRow">
+                    <label className="label">수량</label>
+                    <input
+                      className="input"
+                      type="number"
+                      inputMode="decimal"
+                      autoComplete="off"
+                      step="0.01"
+                      value={partForm.quantity}
+                      onChange={(e) => setPartForm((v) => ({ ...v, quantity: e.target.value }))}
+                    />
+                  </div>
+                </div>
+
+                <label className="checkRow" style={{ marginBottom: 12 }}>
+                  <input type="checkbox" checked={partForm.isBGrade} onChange={(e) => setPartForm((v) => ({ ...v, isBGrade: e.target.checked }))} />
+                  B급
+                </label>
+
+                <div className={`actions ${isMobileLayout ? "stickyActionBar" : ""}`}>
+                  <button className="btn" type="submit" disabled={savingPart}>
+                    {savingPart ? "저장 중..." : partForm.id ? "수정 저장" : "품종 등록"}
+                  </button>
+                  <button className="btn secondary" type="button" onClick={resetPartForm}>
+                    폼 초기화
+                  </button>
+                </div>
+              </form>
+            </section>
+          </div>
+        ) : (
+          <section className="panel">
+            <div className="panelNotice">관리자도구는 관리자 계정만 사용할 수 있습니다.</div>
+          </section>
+        )
+      ) : null}
+
+      {stockModalOpen ? (
+        <div className="scannerOverlay" role="dialog" aria-modal="true" aria-label="입고 등록 품목 전체 보기">
+          <div className="scannerModal">
+            <div className="adminHeaderRow" style={{ marginBottom: 8 }}>
+              <h2 style={{ margin: 0 }}>입고 등록된 전체 품목</h2>
+              <button className="btn secondary small" type="button" onClick={() => setStockModalOpen(false)}>
+                닫기
+              </button>
+            </div>
+            <div className="historyWrap">
+              <table className="historyTable">
+                <thead>
+                  <tr>
+                    <th>품목번호</th>
+                    <th>품명</th>
+                    <th>구분</th>
+                    <th>B급</th>
+                    <th>재고</th>
+                    <th>단위</th>
+                    <th>위치</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {inboundParts.map((part) => (
+                    <tr key={part.id}>
+                      <td>{part.item_number}</td>
+                      <td>{part.designation}</td>
+                      <td>{part.location || "-"}</td>
+                      <td>{part.is_b_grade ? "B급" : "-"}</td>
+                      <td>{part.current_stock}</td>
+                      <td>{part.unit_of_quantity || "-"}</td>
+                      <td>{part.position || "-"}</td>
+                    </tr>
+                  ))}
+                  {inboundParts.length === 0 ? (
+                    <tr>
+                      <td colSpan={7}>입고 등록된 품목이 없습니다.</td>
                     </tr>
                   ) : null}
                 </tbody>
               </table>
             </div>
-          )}
-        </section>
+          </div>
+        </div>
+      ) : null}
 
-        <section className="panel">
-          {isAdmin ? (
-            <>
-              <div className="adminHeaderRow">
-                <h2 style={{ margin: 0 }}>관리자 도구</h2>
-                <button
-                  className="btn secondary small"
-                  type="button"
-                  onClick={() => setAdminToolsOpen((v) => !v)}
-                >
-                  {adminToolsOpen ? "접기" : "열기"}
+      {txEditForm ? (
+        <div className="scannerOverlay" role="dialog" aria-modal="true" aria-label="최근 이력 수정">
+          <div className="scannerModal">
+            <div className="adminHeaderRow" style={{ marginBottom: 8 }}>
+              <h2 style={{ margin: 0 }}>최근 이력 수정</h2>
+              <button className="btn secondary small" type="button" onClick={() => setTxEditForm(null)}>
+                닫기
+              </button>
+            </div>
+            <form onSubmit={submitTransactionEdit}>
+              <div className="formRow">
+                <label className="label">품목</label>
+                <div className="panelNotice">
+                  {txEditForm.itemNumber} / {txEditForm.designation}
+                </div>
+              </div>
+              <div className="formRow">
+                <label className="label">구분</label>
+                <select className="select" value={txEditForm.txType} onChange={(e) => setTxEditForm((prev) => (prev ? { ...prev, txType: e.target.value as "IN" | "OUT" } : prev))}>
+                  <option value="IN">입고 (IN)</option>
+                  <option value="OUT">출고 (OUT)</option>
+                </select>
+              </div>
+              <div className="formRow">
+                <label className="label">수량</label>
+                <input
+                  className="input"
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.01"
+                  value={txEditForm.qty}
+                  onChange={(e) => setTxEditForm((prev) => (prev ? { ...prev, qty: e.target.value } : prev))}
+                />
+              </div>
+              <div className="formRow">
+                <label className="label">메모</label>
+                <input className="input" autoComplete="off" value={txEditForm.memo} onChange={(e) => setTxEditForm((prev) => (prev ? { ...prev, memo: e.target.value } : prev))} />
+              </div>
+              <label className="checkRow" style={{ marginBottom: 12 }}>
+                <input
+                  type="checkbox"
+                  checked={txEditForm.isBGrade}
+                  onChange={(e) => setTxEditForm((prev) => (prev ? { ...prev, isBGrade: e.target.checked } : prev))}
+                />
+                B급
+              </label>
+              <div className="actions">
+                <button className="btn" type="submit" disabled={savingTxEdit}>
+                  {savingTxEdit ? "저장 중..." : "수정 저장"}
+                </button>
+                <button className="btn secondary" type="button" onClick={() => setTxEditForm(null)}>
+                  취소
                 </button>
               </div>
-              {adminToolsOpen ? (
-                <div className="adminBlock">
-                  <div className="meta" style={{ marginBottom: 10 }}>
-                    품목 등록/수정/삭제 관리
-                  </div>
-                  <div className="formRow" style={{ marginBottom: 14 }}>
-                    <label className="label">global minimum stock (전 제품 공통)</label>
-                    <div className="actions">
-                      <input
-                        className="input"
-                        type="number"
-                        inputMode="decimal"
-                        autoComplete="off"
-                        step="0.01"
-                        value={globalMinimumStock}
-                        onChange={(e) => setGlobalMinimumStock(e.target.value)}
-                        style={{ width: isMobileLayout ? "100%" : 180 }}
-                      />
-                      <button className="btn secondary small" type="button" onClick={saveGlobalMinimumStock}>
-                        기준 저장
-                      </button>
-                    </div>
-                  </div>
-                  <h2>{partForm.id ? "품목 수정" : "품목 등록"}</h2>
-                  <form onSubmit={submitPart}>
-                    <div className="formGrid">
-                      <div className="formRow">
-                        <label className="label">item number</label>
-                        <input
-                          className="input"
-                          autoComplete="off"
-                          value={partForm.itemNumber}
-                          onChange={(e) =>
-                            setPartForm((v) => ({ ...v, itemNumber: e.target.value.toUpperCase() }))
-                          }
-                          placeholder="item number"
-                        />
-                        <div className="actions" style={{ marginTop: 8 }}>
-                          <button
-                            className="btn secondary small"
-                            type="button"
-                            onClick={() => openScanner("part")}
-                          >
-                            바코드 스캔
-                          </button>
-                        </div>
-                      </div>
-                      <div className="formRow">
-                        <label className="label">designation</label>
-                        <input
-                          className="input"
-                          autoComplete="off"
-                          value={partForm.designation}
-                          onChange={(e) =>
-                            setPartForm((v) => ({ ...v, designation: e.target.value }))
-                          }
-                          placeholder="designation"
-                        />
-                      </div>
-                      <div className="formRow">
-                        <label className="label">current stock</label>
-                        <input
-                          className="input"
-                          type="number"
-                          inputMode="decimal"
-                          autoComplete="off"
-                          step="0.01"
-                          value={partForm.currentStock}
-                          onChange={(e) =>
-                            setPartForm((v) => ({ ...v, currentStock: e.target.value }))
-                          }
-                        />
-                      </div>
-                      <div className="formRow">
-                        <label className="label">unit of quantity</label>
-                        <input
-                          className="input"
-                          autoComplete="off"
-                          value={partForm.unitOfQuantity}
-                          onChange={(e) =>
-                            setPartForm((v) => ({ ...v, unitOfQuantity: e.target.value }))
-                          }
-                          placeholder="EA"
-                        />
-                      </div>
-                      <div className="formRow">
-                        <label className="label">equipment (설비)</label>
-                        <input
-                          className="input"
-                          autoComplete="off"
-                          value={partForm.equipment}
-                          onChange={(e) =>
-                            setPartForm((v) => ({ ...v, equipment: e.target.value.toUpperCase() }))
-                          }
-                          placeholder="FILLER / BLOWER"
-                        />
-                      </div>
-                      <div className="formRow">
-                        <label className="label">location (파트 위치)</label>
-                        <input
-                          className="input"
-                          autoComplete="off"
-                          value={partForm.location}
-                          onChange={(e) =>
-                            setPartForm((v) => ({ ...v, location: e.target.value.toUpperCase() }))
-                          }
-                          placeholder="RACK-A1 / LINE-2"
-                        />
-                      </div>
-                      <div className="formRow">
-                        <label className="label">quantity</label>
-                        <input
-                          className="input"
-                          type="number"
-                          inputMode="decimal"
-                          autoComplete="off"
-                          step="0.01"
-                          value={partForm.quantity}
-                          onChange={(e) => setPartForm((v) => ({ ...v, quantity: e.target.value }))}
-                        />
-                      </div>
-                    </div>
-
-                    <div className={`actions ${isMobileLayout ? "stickyActionBar" : ""}`}>
-                      <button className="btn" type="submit" disabled={savingPart}>
-                        {savingPart ? "저장 중..." : partForm.id ? "수정 저장" : "품목 등록"}
-                      </button>
-                      <button className="btn secondary" type="button" onClick={resetPartForm}>
-                        폼 초기화
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              ) : (
-                <div className="panelNotice">관리자 도구가 접혀 있습니다. 열기를 눌러 품목 관리를 사용하세요.</div>
-              )}
-            </>
-          ) : (
-            <div className="panelNotice">품목 등록/수정/삭제는 관리자 로그인 후 사용할 수 있습니다.</div>
-          )}
-
-          <div className="adminHeaderRow" style={{ marginTop: 20 }}>
-            <h2 style={{ margin: 0 }}>입출고 처리</h2>
-            {isMobileLayout ? (
-              <button
-                className="btn secondary small"
-                type="button"
-                onClick={() => setTxToolsOpen((v) => !v)}
-              >
-                {txToolsOpen ? "접기" : "열기"}
-              </button>
-            ) : null}
+            </form>
           </div>
-          {txToolsOpen ? (
-          <form onSubmit={submitTx}>
-            <div className="formRow">
-              <label className="label">품목번호 (item_number)</label>
-              <input
-                className="input"
-                autoComplete="off"
-                value={txForm.itemNumber}
-                onChange={(e) =>
-                  setTxForm((v) => ({ ...v, itemNumber: e.target.value.toUpperCase() }))
-                }
-                placeholder="파트 번호"
-              />
-              <div className="actions" style={{ marginTop: 8 }}>
-                <button
-                  className="btn secondary small"
-                  type="button"
-                  onClick={() => openScanner("tx")}
-                >
-                  바코드 스캔
-                </button>
-              </div>
-            </div>
-
-            <div className="formRow">
-              <label className="label">구분</label>
-              <select
-                className="select"
-                value={txForm.txType}
-                onChange={(e) =>
-                  setTxForm((v) => ({ ...v, txType: e.target.value as "IN" | "OUT" }))
-                }
-              >
-                <option value="IN">입고 (IN)</option>
-                <option value="OUT">출고 (OUT)</option>
-              </select>
-            </div>
-
-            <div className="formRow">
-              <label className="label">수량</label>
-              <input
-                className="input"
-                type="number"
-                inputMode="decimal"
-                min="0"
-                step="0.01"
-                autoComplete="off"
-                value={txForm.qty}
-                onChange={(e) => setTxForm((v) => ({ ...v, qty: e.target.value }))}
-              />
-            </div>
-
-            <div className="formRow">
-              <label className="label">메모</label>
-              <input
-                className="input"
-                autoComplete="off"
-                value={txForm.memo}
-                onChange={(e) => setTxForm((v) => ({ ...v, memo: e.target.value }))}
-                placeholder="optional"
-              />
-            </div>
-
-            <div className={`actions ${isMobileLayout ? "stickyActionBar" : ""}`}>
-              <button className="btn" type="submit">
-                저장
-              </button>
-              <button
-                className="btn secondary"
-                type="button"
-                onClick={() => setTxForm({ itemNumber: "", txType: "IN", qty: "", memo: "" })}
-              >
-                초기화
-              </button>
-            </div>
-          </form>
-          ) : (
-            <div className="panelNotice">입출고 처리 폼이 접혀 있습니다. 열기를 눌러 사용하세요.</div>
-          )}
-
-        </section>
-      </div>
-
-      <section className="panel">
-        <h2>최근 이력</h2>
-        {isMobileLayout ? (
-          <div className="historyCards">
-            {txHistory.map((tx) => (
-              <article key={tx.id} className="dataCard">
-                <div className="dataCardHead">
-                  <strong>{tx.parts?.item_number || "-"}</strong>
-                  <span className={`txBadge ${tx.tx_type === "OUT" ? "out" : "in"}`}>{tx.tx_type}</span>
-                </div>
-                <div>{tx.parts?.designation || "-"}</div>
-                <div className="kvGrid">
-                  <div>
-                    <span className="meta">수량</span>
-                    <div>{tx.qty}</div>
-                  </div>
-                  <div>
-                    <span className="meta">날짜</span>
-                    <div>{new Date(tx.created_at).toLocaleString("ko-KR")}</div>
-                  </div>
-                  <div>
-                    <span className="meta">메모</span>
-                    <div>{tx.memo || "-"}</div>
-                  </div>
-                  <div>
-                    <span className="meta">사용자</span>
-                    <div>{tx.actor_name || "-"}</div>
-                  </div>
-                </div>
-              </article>
-            ))}
-            {!loading && txHistory.length === 0 ? <div className="panelNotice">No transactions</div> : null}
-          </div>
-        ) : (
-          <div className="historyWrap">
-            <table className="historyTable">
-              <thead>
-                <tr>
-                  <th>구분</th>
-                  <th>파트번호</th>
-                  <th>부품명</th>
-                  <th>수량</th>
-                  <th>메모</th>
-                  <th>일시</th>
-                  <th>사용자</th>
-                </tr>
-              </thead>
-              <tbody>
-                {txHistory.map((tx) => (
-                  <tr key={tx.id}>
-                    <td><span className={`txBadge ${tx.tx_type === "OUT" ? "out" : "in"}`}>{tx.tx_type}</span></td>
-                    <td>{tx.parts?.item_number || "-"}</td>
-                    <td>{tx.parts?.designation || "-"}</td>
-                    <td>{tx.qty}</td>
-                    <td>{tx.memo || "-"}</td>
-                    <td>{new Date(tx.created_at).toLocaleString("ko-KR")}</td>
-                    <td>{tx.actor_name || "-"}</td>
-                  </tr>
-                ))}
-                {!loading && txHistory.length === 0 ? (
-                  <tr>
-                    <td colSpan={7}>No transactions</td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+        </div>
+      ) : null}
 
       {scannerOpen ? (
         <div className="scannerOverlay" role="dialog" aria-modal="true" aria-label="바코드 스캔">
@@ -1453,7 +1630,7 @@ export default function HomePage() {
               <div className="scannerAim" aria-hidden="true" />
             </div>
             <div className="meta" style={{ marginTop: 8 }}>
-              {(scannerTarget === "part" ? "[품목 등록] " : "[입출고] ") + (scannerError || scannerStatus)}
+              {(scannerTarget === "part" ? "[품종 등록] " : "[입출고] ") + (scannerError || scannerStatus)}
             </div>
             <div className="meta" style={{ marginTop: 4 }}>
               손전등: {scannerTorchSupported ? "지원됨" : "미지원/확인중"}
@@ -1470,11 +1647,6 @@ export default function HomePage() {
                     재스캔
                   </button>
                 </div>
-              </div>
-            ) : null}
-            {scannerError ? (
-              <div className="meta" style={{ marginTop: 6 }}>
-                지원 브라우저에서 사용하거나 파트 번호를 직접 입력하세요.
               </div>
             ) : null}
           </div>

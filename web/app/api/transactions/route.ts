@@ -10,7 +10,7 @@ export async function GET(req: Request) {
       authHeader && authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : null;
 
     const txPath =
-      "/stock_transactions?select=id,part_id,created_by,tx_type,qty,memo,created_at,parts!inner(item_number,designation)&order=created_at.desc&limit=20";
+      "/stock_transactions?select=id,part_id,created_by,tx_type,qty,memo,is_b_grade,created_at,parts!inner(id,item_number,designation,current_stock,location,is_b_grade)&order=created_at.desc&limit=20";
     const res = bearerToken
       ? await supabaseRestAsUser(txPath, bearerToken)
       : await supabaseRest(txPath);
@@ -26,8 +26,16 @@ export async function GET(req: Request) {
       tx_type: "IN" | "OUT" | "ADJUST";
       qty: number;
       memo: string | null;
+      is_b_grade: boolean;
       created_at: string;
-      parts?: { item_number: string; designation: string } | null;
+      parts?: {
+        id: string;
+        item_number: string;
+        designation: string;
+        current_stock?: number;
+        location?: string | null;
+        is_b_grade?: boolean;
+      } | null;
     }>;
 
     let actorMap = new Map<string, string>();

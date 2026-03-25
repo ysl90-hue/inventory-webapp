@@ -94,6 +94,26 @@ to authenticated
 using (public.is_admin())
 with check (public.is_admin());
 
+drop policy if exists "part categories write" on public.part_categories;
+create policy "part categories write"
+on public.part_categories for all
+to authenticated
+using (public.is_admin())
+with check (public.is_admin());
+
+drop policy if exists "stock tx update admin only" on public.stock_transactions;
+create policy "stock tx update admin only"
+on public.stock_transactions for update
+to authenticated
+using (public.is_admin())
+with check (public.is_admin());
+
+drop policy if exists "stock tx delete admin only" on public.stock_transactions;
+create policy "stock tx delete admin only"
+on public.stock_transactions for delete
+to authenticated
+using (public.is_admin());
+
 insert into public.profiles (id, email, display_name, role)
 select u.id, u.email, split_part(coalesce(u.email, ''), '@', 1), 'user'::public.app_role
 from auth.users u
