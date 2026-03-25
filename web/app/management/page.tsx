@@ -1156,8 +1156,8 @@ export default function ManagementPage() {
       ) : null}
 
       {activeTab === "stock" ? (
-        <div className="grid">
-          <section className="panel">
+        <>
+          <section className="panel" style={{ marginBottom: 16 }}>
             <h2>입출고 처리</h2>
             <form onSubmit={submitTx}>
               <div className="formRow">
@@ -1336,7 +1336,7 @@ export default function ManagementPage() {
               </div>
             )}
           </section>
-        </div>
+        </>
       ) : null}
 
       {activeTab === "admin" ? (
