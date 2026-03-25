@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { normalizeCategory, normalizeUnit, UNIT_OPTIONS } from "@/lib/inventory";
 import type { Part, PartCategory, StockTransaction } from "@/lib/types";
 
-type ActiveTab = "search" | "stock" | "admin";
+type ActiveTab = "search" | "inbound" | "stock" | "admin";
 
 type TxForm = {
   itemNumber: string;
@@ -86,7 +86,6 @@ export default function ManagementPage() {
   const [error, setError] = useState<string | null>(null);
   const [successToast, setSuccessToast] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>("search");
-  const [stockModalOpen, setStockModalOpen] = useState(false);
 
   const [txForm, setTxForm] = useState<TxForm>(EMPTY_TX_FORM);
   const [partForm, setPartForm] = useState<PartForm>(EMPTY_PART_FORM);
@@ -968,9 +967,6 @@ export default function ManagementPage() {
             {authDisplayName || session.user.email?.split("@")[0] || "Logged in"} {"·"} <strong>{isAdmin ? "ADMIN" : "USER"}</strong>
           </div>
           <div className="actions">
-            <button className="btn secondary small" type="button" onClick={() => setStockModalOpen(true)}>
-              입고 전체 보기
-            </button>
             <button className="btn secondary small" type="button" onClick={() => void loadData()}>
               새로고침
             </button>
@@ -985,6 +981,9 @@ export default function ManagementPage() {
         <div className="tabNav" role="tablist" aria-label="관리 탭">
           <button className={`tabButton ${activeTab === "search" ? "active" : ""}`} type="button" onClick={() => setActiveTab("search")}>
             검색
+          </button>
+          <button className={`tabButton ${activeTab === "inbound" ? "active" : ""}`} type="button" onClick={() => setActiveTab("inbound")}>
+            입고 등록 파트
           </button>
           <button className={`tabButton ${activeTab === "stock" ? "active" : ""}`} type="button" onClick={() => setActiveTab("stock")}>
             입출고 처리
@@ -1051,9 +1050,6 @@ export default function ManagementPage() {
               </button>
               <button className="btn secondary" type="button" onClick={clearSearch}>
                 검색초기화
-              </button>
-              <button className="btn secondary" type="button" onClick={() => setStockModalOpen(true)}>
-                입고 전체 팝업
               </button>
             </div>
           </section>
@@ -1153,6 +1149,101 @@ export default function ManagementPage() {
             )}
           </section>
         </>
+      ) : null}
+
+      {activeTab === "inbound" ? (
+        <section className="panel">
+          <div className="adminHeaderRow">
+            <h2 style={{ margin: 0 }}>입고 등록된 전체 품목</h2>
+            <div className="meta">{inboundParts.length}건</div>
+          </div>
+          {isMobileLayout ? (
+            <div className="partsCards">
+              {inboundParts.map((part) => (
+                <article key={part.id} className="dataCard">
+                  <div className="dataCardHead">
+                    <strong>{part.item_number}</strong>
+                    <span>재고 {part.current_stock}</span>
+                  </div>
+                  <div>{part.designation}</div>
+                  <div className="badgeRow">
+                    <span className="softBadge">{part.location || "구분 없음"}</span>
+                    <span className={`softBadge ${part.is_b_grade ? "warn" : ""}`}>{part.is_b_grade ? "B급" : "일반"}</span>
+                    <span className="softBadge">{part.unit_of_quantity || "-"}</span>
+                  </div>
+                  <div className="kvGrid">
+                    <div>
+                      <span className="meta">위치</span>
+                      <div>{part.position || "-"}</div>
+                    </div>
+                    <div>
+                      <span className="meta">최소재고</span>
+                      <div>{minimumStockLabel || part.minimum_stock || "-"}</div>
+                    </div>
+                  </div>
+                  {isAdmin ? (
+                    <div className="actions" style={{ marginTop: 10 }}>
+                      <button className="btn secondary small" type="button" onClick={() => editPart(part)}>
+                        수정
+                      </button>
+                      <button className="btn danger small" type="button" onClick={() => void deletePart(part)}>
+                        삭제
+                      </button>
+                    </div>
+                  ) : null}
+                </article>
+              ))}
+              {!loading && inboundParts.length === 0 ? <div className="panelNotice">입고 등록된 품목이 없습니다.</div> : null}
+            </div>
+          ) : (
+            <div className="historyWrap">
+              <table className="historyTable">
+                <thead>
+                  <tr>
+                    <th>품목번호</th>
+                    <th>품명</th>
+                    <th>구분</th>
+                    <th>B급</th>
+                    <th>재고</th>
+                    <th>단위</th>
+                    <th>위치</th>
+                    {isAdmin ? <th>관리</th> : null}
+                  </tr>
+                </thead>
+                <tbody>
+                  {inboundParts.map((part) => (
+                    <tr key={part.id}>
+                      <td>{part.item_number}</td>
+                      <td>{part.designation}</td>
+                      <td>{part.location || "-"}</td>
+                      <td>{part.is_b_grade ? "B급" : "-"}</td>
+                      <td>{part.current_stock}</td>
+                      <td>{part.unit_of_quantity || "-"}</td>
+                      <td>{part.position || "-"}</td>
+                      {isAdmin ? (
+                        <td>
+                          <div className="actions">
+                            <button className="btn secondary small" type="button" onClick={() => editPart(part)}>
+                              수정
+                            </button>
+                            <button className="btn danger small" type="button" onClick={() => void deletePart(part)}>
+                              삭제
+                            </button>
+                          </div>
+                        </td>
+                      ) : null}
+                    </tr>
+                  ))}
+                  {!loading && inboundParts.length === 0 ? (
+                    <tr>
+                      <td colSpan={isAdmin ? 8 : 7}>입고 등록된 품목이 없습니다.</td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       ) : null}
 
       {activeTab === "stock" ? (
@@ -1500,52 +1591,6 @@ export default function ManagementPage() {
             <div className="panelNotice">관리자도구는 관리자 계정만 사용할 수 있습니다.</div>
           </section>
         )
-      ) : null}
-
-      {stockModalOpen ? (
-        <div className="scannerOverlay" role="dialog" aria-modal="true" aria-label="입고 등록 품목 전체 보기">
-          <div className="scannerModal">
-            <div className="adminHeaderRow" style={{ marginBottom: 8 }}>
-              <h2 style={{ margin: 0 }}>입고 등록된 전체 품목</h2>
-              <button className="btn secondary small" type="button" onClick={() => setStockModalOpen(false)}>
-                닫기
-              </button>
-            </div>
-            <div className="historyWrap">
-              <table className="historyTable">
-                <thead>
-                  <tr>
-                    <th>품목번호</th>
-                    <th>품명</th>
-                    <th>구분</th>
-                    <th>B급</th>
-                    <th>재고</th>
-                    <th>단위</th>
-                    <th>위치</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {inboundParts.map((part) => (
-                    <tr key={part.id}>
-                      <td>{part.item_number}</td>
-                      <td>{part.designation}</td>
-                      <td>{part.location || "-"}</td>
-                      <td>{part.is_b_grade ? "B급" : "-"}</td>
-                      <td>{part.current_stock}</td>
-                      <td>{part.unit_of_quantity || "-"}</td>
-                      <td>{part.position || "-"}</td>
-                    </tr>
-                  ))}
-                  {inboundParts.length === 0 ? (
-                    <tr>
-                      <td colSpan={7}>입고 등록된 품목이 없습니다.</td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
       ) : null}
 
       {txEditForm ? (
