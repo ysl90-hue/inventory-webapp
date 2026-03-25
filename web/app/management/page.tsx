@@ -1054,9 +1054,6 @@ export default function ManagementPage() {
               <button className="btn secondary" type="button" onClick={clearSearch}>
                 검색초기화
               </button>
-              <button className="btn secondary" type="button" onClick={() => setStockModalOpen(true)}>
-                입고 등록 파트 보기
-              </button>
             </div>
           </section>
 
@@ -1072,12 +1069,12 @@ export default function ManagementPage() {
                   return (
                     <article key={part.id} className="dataCard">
                       <div className="dataCardHead">
-                        <strong>{part.item_number}</strong>
+                        <strong>{part.location || "구분 없음"}</strong>
                         <span className={low ? "low" : undefined}>재고 {part.current_stock}</span>
                       </div>
+                      <div>{part.item_number}</div>
                       <div>{part.designation}</div>
                       <div className="badgeRow">
-                        <span className="softBadge">{part.location || "구분 없음"}</span>
                         <span className={`softBadge ${part.is_b_grade ? "warn" : ""}`}>{part.is_b_grade ? "B급" : "일반"}</span>
                         <span className="softBadge">{part.unit_of_quantity || "-"}</span>
                       </div>
@@ -1116,9 +1113,9 @@ export default function ManagementPage() {
                 <table>
                   <thead>
                     <tr>
+                      <th>구분</th>
                       <th>품목번호</th>
                       <th>품명</th>
-                      <th>구분</th>
                       <th>B급</th>
                       <th>재고</th>
                       <th>단위</th>
@@ -1129,9 +1126,9 @@ export default function ManagementPage() {
                   <tbody>
                     {filteredParts.map((part) => (
                       <tr key={part.id}>
+                        <td>{part.location || "-"}</td>
                         <td>{part.item_number}</td>
                         <td>{part.designation}</td>
-                        <td>{part.location || "-"}</td>
                         <td>{part.is_b_grade ? "B급" : "-"}</td>
                         <td className={isPartLow(part, minimumStockValue) ? "low" : undefined}>{part.current_stock}</td>
                         <td>{part.unit_of_quantity || "-"}</td>
@@ -1369,12 +1366,12 @@ export default function ManagementPage() {
                 {inboundParts.map((part) => (
                   <article key={part.id} className="dataCard">
                     <div className="dataCardHead">
-                      <strong>{part.item_number}</strong>
+                      <strong>{part.location || "구분 없음"}</strong>
                       <span>재고 {part.current_stock}</span>
                     </div>
+                    <div>{part.item_number}</div>
                     <div>{part.designation}</div>
                     <div className="badgeRow">
-                      <span className="softBadge">{part.location || "구분 없음"}</span>
                       <span className={`softBadge ${part.is_b_grade ? "warn" : ""}`}>{part.is_b_grade ? "B급" : "일반"}</span>
                       <span className="softBadge">{part.unit_of_quantity || "-"}</span>
                     </div>
@@ -1407,9 +1404,9 @@ export default function ManagementPage() {
                 <table className="historyTable">
                   <thead>
                     <tr>
+                      <th>구분</th>
                       <th>품목번호</th>
                       <th>품명</th>
-                      <th>구분</th>
                       <th>B급</th>
                       <th>재고</th>
                       <th>단위</th>
@@ -1420,9 +1417,9 @@ export default function ManagementPage() {
                   <tbody>
                     {inboundParts.map((part) => (
                       <tr key={part.id}>
+                        <td>{part.location || "-"}</td>
                         <td>{part.item_number}</td>
                         <td>{part.designation}</td>
-                        <td>{part.location || "-"}</td>
                         <td>{part.is_b_grade ? "B급" : "-"}</td>
                         <td>{part.current_stock}</td>
                         <td>{part.unit_of_quantity || "-"}</td>
