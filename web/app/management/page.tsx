@@ -84,7 +84,7 @@ function isPartLow(part: Part, minimumStockValue: number) {
 function formatSplitStock(part: Part) {
   const normal = Number(part.normal_stock ?? part.current_stock ?? 0);
   const bGrade = Number(part.b_grade_stock ?? 0);
-  return `정상 ${normal} (B급 ${bGrade})`;
+  return `${normal} (B급 ${bGrade})`;
 }
 
 export default function ManagementPage() {
@@ -1137,7 +1137,7 @@ export default function ManagementPage() {
                       <div>{part.item_number}</div>
                       <div>{part.designation}</div>
                       <div className="badgeRow">
-                        <span className={`softBadge ${part.is_b_grade ? "warn" : ""}`}>{part.is_b_grade ? "B급" : "일반"}</span>
+                        <span className="softBadge">{formatSplitStock(part)}</span>
                         <span className="softBadge">{part.unit_of_quantity || "-"}</span>
                       </div>
                       <div className="kvGrid">
@@ -1178,7 +1178,6 @@ export default function ManagementPage() {
                       <th>구분</th>
                       <th>품목번호</th>
                       <th>품명</th>
-                      <th>B급</th>
                       <th>재고</th>
                       <th>단위</th>
                       <th>위치</th>
@@ -1191,8 +1190,7 @@ export default function ManagementPage() {
                         <td>{part.location || "-"}</td>
                         <td>{part.item_number}</td>
                         <td>{part.designation}</td>
-                        <td>{part.is_b_grade ? "B급" : "-"}</td>
-                        <td className={isPartLow(part, minimumStockValue) ? "low" : undefined}>{part.current_stock}</td>
+                        <td className={isPartLow(part, minimumStockValue) ? "low" : undefined}>{formatSplitStock(part)}</td>
                         <td>{part.unit_of_quantity || "-"}</td>
                         <td>{part.position || "-"}</td>
                         {isAdmin ? (
@@ -1211,12 +1209,12 @@ export default function ManagementPage() {
                     ))}
                     {!loading && search.trim().length === 0 ? (
                       <tr>
-                        <td colSpan={isAdmin ? 8 : 7}>검색어를 입력하면 결과가 표시됩니다.</td>
+                        <td colSpan={isAdmin ? 7 : 6}>검색어를 입력하면 결과가 표시됩니다.</td>
                       </tr>
                     ) : null}
                     {!loading && search.trim().length > 0 && filteredParts.length === 0 ? (
                       <tr>
-                        <td colSpan={isAdmin ? 8 : 7}>검색 결과가 없습니다.</td>
+                        <td colSpan={isAdmin ? 7 : 6}>검색 결과가 없습니다.</td>
                       </tr>
                     ) : null}
                   </tbody>
