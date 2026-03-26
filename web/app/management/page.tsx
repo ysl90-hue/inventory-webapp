@@ -2205,11 +2205,6 @@ export default function ManagementPage() {
                     </button>
                   </div>
                 </div>
-                <div className="categoryChips">
-                  <span className="softBadge">구분 {categories.length}개</span>
-                  <span className="softBadge">위치 {locations.length}개</span>
-                </div>
-                <div className="meta">구분/위치 목록 관리는 품종등록 상단 버튼에서 바로 열 수 있습니다.</div>
               </div>
             </section>
           </div>
