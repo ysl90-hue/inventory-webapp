@@ -87,6 +87,8 @@ export default function ManagementPage() {
   const [successToast, setSuccessToast] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>("search");
   const [stockModalOpen, setStockModalOpen] = useState(false);
+  const [stockModalSearch, setStockModalSearch] = useState("");
+  const [stockModalSort, setStockModalSort] = useState<"category" | "item" | "designation" | "stockDesc" | "stockAsc">("category");
 
   const [txForm, setTxForm] = useState<TxForm>(EMPTY_TX_FORM);
   const [partForm, setPartForm] = useState<PartForm>(EMPTY_PART_FORM);
@@ -611,6 +613,28 @@ export default function ManagementPage() {
       .filter((part) => Number(part.current_stock) > 0)
       .sort((a, b) => a.item_number.localeCompare(b.item_number));
   }, [parts]);
+
+  const filteredInboundParts = useMemo(() => {
+    const keyword = stockModalSearch.trim().toLowerCase();
+    const filtered = inboundParts.filter((part) => {
+      if (!keyword) return true;
+      return (
+        part.item_number.toLowerCase().includes(keyword) ||
+        part.designation.toLowerCase().includes(keyword) ||
+        (part.location || "").toLowerCase().includes(keyword)
+      );
+    });
+
+    filtered.sort((a, b) => {
+      if (stockModalSort === "item") return a.item_number.localeCompare(b.item_number);
+      if (stockModalSort === "designation") return a.designation.localeCompare(b.designation);
+      if (stockModalSort === "stockAsc") return Number(a.current_stock) - Number(b.current_stock);
+      if (stockModalSort === "stockDesc") return Number(b.current_stock) - Number(a.current_stock);
+      return (a.location || "").localeCompare(b.location || "") || a.item_number.localeCompare(b.item_number);
+    });
+
+    return filtered;
+  }, [inboundParts, stockModalSearch, stockModalSort]);
 
   const lowCount = parts.filter((part) => isPartLow(part, minimumStockValue)).length;
   const inboundRegisteredCount = inboundParts.length;
@@ -1354,15 +1378,30 @@ export default function ManagementPage() {
             <div className="adminHeaderRow" style={{ marginBottom: 8 }}>
               <h2 style={{ margin: 0 }}>입고 등록된 전체 품목</h2>
               <div className="actions">
-                <div className="meta">{inboundParts.length}건</div>
+                <div className="meta">{filteredInboundParts.length}건</div>
                 <button className="btn secondary small" type="button" onClick={() => setStockModalOpen(false)}>
                   닫기
                 </button>
               </div>
             </div>
+            <div className="modalToolbar">
+              <input
+                className="input"
+                placeholder="구분 / 파트번호 / 품명 검색"
+                value={stockModalSearch}
+                onChange={(e) => setStockModalSearch(e.target.value)}
+              />
+              <select className="select" value={stockModalSort} onChange={(e) => setStockModalSort(e.target.value as typeof stockModalSort)}>
+                <option value="category">구분순</option>
+                <option value="item">파트번호순</option>
+                <option value="designation">품명순</option>
+                <option value="stockDesc">재고많은순</option>
+                <option value="stockAsc">재고적은순</option>
+              </select>
+            </div>
             {isMobileLayout ? (
               <div className="partsCards">
-                {inboundParts.map((part) => (
+                {filteredInboundParts.map((part) => (
                   <article key={part.id} className="dataCard">
                     <div className="dataCardHead">
                       <strong>{part.location || "구분 없음"}</strong>
@@ -1396,7 +1435,7 @@ export default function ManagementPage() {
                     ) : null}
                   </article>
                 ))}
-                {!loading && inboundParts.length === 0 ? <div className="panelNotice">입고 등록된 품목이 없습니다.</div> : null}
+                {!loading && filteredInboundParts.length === 0 ? <div className="panelNotice">조건에 맞는 입고 등록 품목이 없습니다.</div> : null}
               </div>
             ) : (
               <div className="historyWrap">
@@ -1414,7 +1453,7 @@ export default function ManagementPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {inboundParts.map((part) => (
+                    {filteredInboundParts.map((part) => (
                       <tr key={part.id}>
                         <td>{part.location || "-"}</td>
                         <td>{part.item_number}</td>
@@ -1437,9 +1476,9 @@ export default function ManagementPage() {
                         ) : null}
                       </tr>
                     ))}
-                    {!loading && inboundParts.length === 0 ? (
+                    {!loading && filteredInboundParts.length === 0 ? (
                       <tr>
-                        <td colSpan={isAdmin ? 8 : 7}>입고 등록된 품목이 없습니다.</td>
+                        <td colSpan={isAdmin ? 8 : 7}>조건에 맞는 입고 등록 품목이 없습니다.</td>
                       </tr>
                     ) : null}
                   </tbody>

@@ -77,6 +77,13 @@ a {
   margin-top: 10px;
 }
 
+.modalToolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
 .filterChips {
   display: flex;
   gap: 8px;
@@ -149,7 +156,7 @@ a {
 
 .statsGrid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 14px;
 }
@@ -576,6 +583,10 @@ th {
 
   .statsGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .modalToolbar {
+    grid-template-columns: 1fr;
   }
 
   .header {
