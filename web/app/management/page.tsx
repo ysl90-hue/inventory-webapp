@@ -15,6 +15,7 @@ type TxForm = {
   txType: "IN" | "OUT";
   qty: string;
   memo: string;
+  txDate: string;
   isBGrade: boolean;
 };
 
@@ -41,13 +42,22 @@ type TxEditForm = {
   isBGrade: boolean;
 };
 
-const EMPTY_TX_FORM: TxForm = {
-  itemNumber: "",
-  txType: "IN",
-  qty: "",
-  memo: "",
-  isBGrade: false,
-};
+function formatDateTimeLocalInput(value?: string | Date) {
+  const date = value ? new Date(value) : new Date();
+  const adjusted = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return adjusted.toISOString().slice(0, 16);
+}
+
+function createEmptyTxForm(): TxForm {
+  return {
+    itemNumber: "",
+    txType: "IN",
+    qty: "",
+    memo: "",
+    txDate: formatDateTimeLocalInput(),
+    isBGrade: false,
+  };
+}
 
 const EMPTY_PART_FORM: PartForm = {
   id: null,
@@ -90,13 +100,14 @@ export default function ManagementPage() {
   const [stockModalSearch, setStockModalSearch] = useState("");
   const [stockModalSort, setStockModalSort] = useState<"category" | "item" | "designation" | "stockDesc" | "stockAsc">("category");
 
-  const [txForm, setTxForm] = useState<TxForm>(EMPTY_TX_FORM);
+  const [txForm, setTxForm] = useState<TxForm>(createEmptyTxForm);
   const [partForm, setPartForm] = useState<PartForm>(EMPTY_PART_FORM);
   const [savingPart, setSavingPart] = useState(false);
   const [savingTxEdit, setSavingTxEdit] = useState(false);
   const [newCategory, setNewCategory] = useState("");
   const [savingCategory, setSavingCategory] = useState(false);
   const [txEditForm, setTxEditForm] = useState<TxEditForm | null>(null);
+  const [txHistorySearch, setTxHistorySearch] = useState("");
 
   const [session, setSession] = useState<Session | null>(null);
   const [authRole, setAuthRole] = useState<"user" | "admin" | null>(null);
@@ -639,6 +650,22 @@ export default function ManagementPage() {
   const lowCount = parts.filter((part) => isPartLow(part, minimumStockValue)).length;
   const inboundRegisteredCount = inboundParts.length;
   const selectedPart = parts.find((part) => part.item_number === txForm.itemNumber.trim().toUpperCase()) || null;
+  const filteredTxHistory = useMemo(() => {
+    const keyword = txHistorySearch.trim().toLowerCase();
+    if (!keyword) return txHistory;
+    return txHistory.filter((tx) => {
+      const createdAt = new Date(tx.created_at).toLocaleString("ko-KR").toLowerCase();
+      return (
+        (tx.parts?.item_number || "").toLowerCase().includes(keyword) ||
+        (tx.parts?.designation || "").toLowerCase().includes(keyword) ||
+        (tx.parts?.location || "").toLowerCase().includes(keyword) ||
+        (tx.memo || "").toLowerCase().includes(keyword) ||
+        (tx.actor_name || "").toLowerCase().includes(keyword) ||
+        createdAt.includes(keyword) ||
+        (tx.is_b_grade ? "b급" : "").includes(keyword)
+      );
+    });
+  }, [txHistory, txHistorySearch]);
 
   function submitSearch() {
     setSearch(searchInput.trim());
@@ -673,8 +700,13 @@ export default function ManagementPage() {
 
     const qty = Number(txForm.qty);
     const normalizedItemNumber = txForm.itemNumber.trim().toUpperCase();
+    const createdAt = txForm.txDate ? new Date(txForm.txDate) : null;
     if (!normalizedItemNumber || !Number.isFinite(qty) || qty <= 0) {
       setError("품목번호와 수량을 정확히 입력하세요.");
+      return;
+    }
+    if (!createdAt || Number.isNaN(createdAt.getTime())) {
+      setError("날짜와 시간을 정확히 입력하세요.");
       return;
     }
 
@@ -689,6 +721,7 @@ export default function ManagementPage() {
         txType: txForm.txType,
         qty,
         memo: txForm.memo.trim() || null,
+        createdAt: createdAt.toISOString(),
         isBGrade: txForm.isBGrade,
       }),
     });
@@ -699,7 +732,7 @@ export default function ManagementPage() {
       return;
     }
 
-    setTxForm(EMPTY_TX_FORM);
+    setTxForm(createEmptyTxForm());
     showSuccessToast(`${txForm.txType === "IN" ? "입고" : "출고"} 처리 완료`);
     await loadData();
   }
@@ -1245,6 +1278,16 @@ export default function ManagementPage() {
                 />
               </div>
 
+              <div className="formRow">
+                <label className="label">날짜 / 시간</label>
+                <input
+                  className="input"
+                  type="datetime-local"
+                  value={txForm.txDate}
+                  onChange={(e) => setTxForm((v) => ({ ...v, txDate: e.target.value }))}
+                />
+              </div>
+
               <label className="checkRow" style={{ marginBottom: 12 }}>
                 <input type="checkbox" checked={txForm.isBGrade} onChange={(e) => setTxForm((v) => ({ ...v, isBGrade: e.target.checked }))} />
                 B급
@@ -1254,7 +1297,7 @@ export default function ManagementPage() {
                 <button className="btn" type="submit">
                   저장
                 </button>
-                <button className="btn secondary" type="button" onClick={() => setTxForm(EMPTY_TX_FORM)}>
+                <button className="btn secondary" type="button" onClick={() => setTxForm(createEmptyTxForm())}>
                   초기화
                 </button>
               </div>
@@ -1264,11 +1307,19 @@ export default function ManagementPage() {
           <section className="panel">
             <div className="adminHeaderRow">
               <h2 style={{ margin: 0 }}>최근 이력</h2>
-              <div className="meta">최근 20건</div>
+              <div className="meta">{filteredTxHistory.length}건</div>
+            </div>
+            <div className="formRow" style={{ marginBottom: 12 }}>
+              <input
+                className="input"
+                placeholder="품목번호 / 품명 / 구분 / 메모 / 사용자 / 날짜 검색"
+                value={txHistorySearch}
+                onChange={(e) => setTxHistorySearch(e.target.value)}
+              />
             </div>
             {isMobileLayout ? (
               <div className="historyCards">
-                {txHistory.map((tx) => (
+                {filteredTxHistory.map((tx) => (
                   <article key={tx.id} className="dataCard">
                     <div className="dataCardHead">
                       <strong>{tx.parts?.item_number || "-"}</strong>
@@ -1328,7 +1379,7 @@ export default function ManagementPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {txHistory.map((tx) => (
+                {filteredTxHistory.map((tx) => (
                       <tr key={tx.id}>
                         <td>
                           <span className={`txBadge ${tx.tx_type === "OUT" ? "out" : "in"}`}>{tx.tx_type}</span>
@@ -1359,9 +1410,9 @@ export default function ManagementPage() {
                         ) : null}
                       </tr>
                     ))}
-                    {!loading && txHistory.length === 0 ? (
+                    {!loading && filteredTxHistory.length === 0 ? (
                       <tr>
-                        <td colSpan={isAdmin ? 10 : 9}>최근 이력이 없습니다.</td>
+                        <td colSpan={isAdmin ? 10 : 9}>조건에 맞는 최근 이력이 없습니다.</td>
                       </tr>
                     ) : null}
                   </tbody>

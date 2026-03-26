@@ -67,6 +67,7 @@ for each row
 execute function public.set_updated_at();
 
 drop function if exists public.apply_stock_transaction(text, text, numeric, text);
+drop function if exists public.apply_stock_transaction(text, text, numeric, text, boolean);
 
 -- Atomic stock update + transaction log
 create or replace function public.apply_stock_transaction(
@@ -74,6 +75,7 @@ create or replace function public.apply_stock_transaction(
   p_tx_type text,
   p_qty numeric,
   p_memo text default null,
+  p_created_at timestamptz default null,
   p_is_b_grade boolean default false
 )
 returns public.parts
@@ -121,14 +123,15 @@ begin
   returning * into v_part;
 
   insert into public.stock_transactions (
-    part_id, tx_type, qty, memo, is_b_grade, created_by
+    part_id, tx_type, qty, memo, is_b_grade, created_by, created_at
   ) values (
     v_part.id,
     p_tx_type,
     case when p_tx_type = 'ADJUST' then abs(v_new_stock) else p_qty end,
     p_memo,
     coalesce(p_is_b_grade, false),
-    auth.uid()
+    auth.uid(),
+    coalesce(p_created_at, now())
   );
 
   return v_part;
@@ -165,7 +168,7 @@ on public.stock_transactions for insert
 to anon, authenticated
 with check (true);
 
-grant execute on function public.apply_stock_transaction(text, text, numeric, text, boolean)
+grant execute on function public.apply_stock_transaction(text, text, numeric, text, timestamptz, boolean)
 to anon, authenticated;
 
 drop policy if exists "part categories read" on public.part_categories;

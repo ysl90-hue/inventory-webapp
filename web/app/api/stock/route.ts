@@ -15,6 +15,7 @@ export async function POST(req: NextRequest) {
       txType?: "IN" | "OUT";
       qty?: number;
       memo?: string | null;
+      createdAt?: string | null;
       isBGrade?: boolean;
     };
 
@@ -22,6 +23,7 @@ export async function POST(req: NextRequest) {
     const txType = body.txType;
     const qty = Number(body.qty);
     const memo = body.memo?.trim() || null;
+    const createdAt = body.createdAt?.trim() || null;
     const isBGrade = parseBooleanFlag(body.isBGrade);
 
     if (!itemNumber || (txType !== "IN" && txType !== "OUT") || !Number.isFinite(qty) || qty <= 0) {
@@ -35,6 +37,7 @@ export async function POST(req: NextRequest) {
         p_tx_type: txType,
         p_qty: qty,
         p_memo: memo,
+        p_created_at: createdAt,
         p_is_b_grade: isBGrade,
       }),
     };
