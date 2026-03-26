@@ -87,6 +87,11 @@ function formatSplitStock(part: Part) {
   return `${normal} (B급 ${bGrade})`;
 }
 
+function formatTransactionSplitQty(tx: StockTransaction) {
+  const qty = Number(tx.qty || 0);
+  return tx.is_b_grade ? `0 (B급 ${qty})` : `${qty} (B급 0)`;
+}
+
 export default function ManagementPage() {
   const GLOBAL_MIN_STOCK_KEY = "inventory_global_min_stock";
   const router = useRouter();
@@ -1331,13 +1336,13 @@ export default function ManagementPage() {
                     </div>
                     <div>{tx.parts?.designation || "-"}</div>
                     <div className="badgeRow">
-                      {tx.is_b_grade ? <span className="softBadge warn">B급</span> : null}
+                      <span className="softBadge">{formatTransactionSplitQty(tx)}</span>
                       <span className="softBadge">{tx.parts?.location || "구분 없음"}</span>
                     </div>
                     <div className="kvGrid">
                       <div>
                         <span className="meta">수량</span>
-                        <div>{tx.qty}</div>
+                        <div>{formatTransactionSplitQty(tx)}</div>
                       </div>
                       <div>
                         <span className="meta">날짜</span>
@@ -1374,7 +1379,6 @@ export default function ManagementPage() {
                       <th>품목번호</th>
                       <th>품명</th>
                       <th>카테고리</th>
-                      <th>B급</th>
                       <th>수량</th>
                       <th>메모</th>
                       <th>일시</th>
@@ -1391,8 +1395,7 @@ export default function ManagementPage() {
                         <td>{tx.parts?.item_number || "-"}</td>
                         <td>{tx.parts?.designation || "-"}</td>
                         <td>{tx.parts?.location || "-"}</td>
-                        <td>{tx.is_b_grade ? "B급" : "-"}</td>
-                        <td>{tx.qty}</td>
+                        <td>{formatTransactionSplitQty(tx)}</td>
                         <td>{tx.memo || "-"}</td>
                         <td>{new Date(tx.created_at).toLocaleString("ko-KR")}</td>
                         <td>{tx.actor_name || "-"}</td>
@@ -1416,7 +1419,7 @@ export default function ManagementPage() {
                     ))}
                     {!loading && filteredTxHistory.length === 0 ? (
                       <tr>
-                        <td colSpan={isAdmin ? 10 : 9}>조건에 맞는 최근 이력이 없습니다.</td>
+                        <td colSpan={isAdmin ? 9 : 8}>조건에 맞는 최근 이력이 없습니다.</td>
                       </tr>
                     ) : null}
                   </tbody>
