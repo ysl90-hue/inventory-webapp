@@ -81,6 +81,12 @@ function isPartLow(part: Part, minimumStockValue: number) {
   return Number(part.current_stock) <= minimumStockValue;
 }
 
+function formatSplitStock(part: Part) {
+  const normal = Number(part.normal_stock ?? part.current_stock ?? 0);
+  const bGrade = Number(part.b_grade_stock ?? 0);
+  return `정상 ${normal} (B급 ${bGrade})`;
+}
+
 export default function ManagementPage() {
   const GLOBAL_MIN_STOCK_KEY = "inventory_global_min_stock";
   const router = useRouter();
@@ -1456,12 +1462,12 @@ export default function ManagementPage() {
                   <article key={part.id} className="dataCard">
                     <div className="dataCardHead">
                       <strong>{part.location || "구분 없음"}</strong>
-                      <span>재고 {part.current_stock}</span>
+                      <span>{formatSplitStock(part)}</span>
                     </div>
                     <div>{part.item_number}</div>
                     <div>{part.designation}</div>
                     <div className="badgeRow">
-                      <span className={`softBadge ${part.is_b_grade ? "warn" : ""}`}>{part.is_b_grade ? "B급" : "일반"}</span>
+                      <span className="softBadge">{formatSplitStock(part)}</span>
                       <span className="softBadge">{part.unit_of_quantity || "-"}</span>
                     </div>
                     <div className="kvGrid">
@@ -1496,7 +1502,6 @@ export default function ManagementPage() {
                       <th>구분</th>
                       <th>품목번호</th>
                       <th>품명</th>
-                      <th>B급</th>
                       <th>재고</th>
                       <th>단위</th>
                       <th>위치</th>
@@ -1509,8 +1514,7 @@ export default function ManagementPage() {
                         <td>{part.location || "-"}</td>
                         <td>{part.item_number}</td>
                         <td>{part.designation}</td>
-                        <td>{part.is_b_grade ? "B급" : "-"}</td>
-                        <td>{part.current_stock}</td>
+                        <td>{formatSplitStock(part)}</td>
                         <td>{part.unit_of_quantity || "-"}</td>
                         <td>{part.position || "-"}</td>
                         {isAdmin ? (
@@ -1529,7 +1533,7 @@ export default function ManagementPage() {
                     ))}
                     {!loading && filteredInboundParts.length === 0 ? (
                       <tr>
-                        <td colSpan={isAdmin ? 8 : 7}>조건에 맞는 입고 등록 품목이 없습니다.</td>
+                        <td colSpan={isAdmin ? 7 : 6}>조건에 맞는 입고 등록 품목이 없습니다.</td>
                       </tr>
                     ) : null}
                   </tbody>

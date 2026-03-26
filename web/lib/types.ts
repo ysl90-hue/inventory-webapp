@@ -10,6 +10,8 @@ export type Part = {
   minimum_stock: number;
   location: string | null;
   is_b_grade: boolean;
+  normal_stock?: number;
+  b_grade_stock?: number;
   created_at: string;
   updated_at: string;
 };

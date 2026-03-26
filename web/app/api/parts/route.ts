@@ -42,12 +42,63 @@ function normalizePayload(input: PartPayload) {
 
 export async function GET() {
   try {
-    const res = await supabaseRest("/parts?select=*&order=item_number.asc");
-    const text = await res.text();
-    if (!res.ok) {
-      return NextResponse.json({ error: text }, { status: res.status });
+    const [partsRes, txRes] = await Promise.all([
+      supabaseRest("/parts?select=*&order=item_number.asc"),
+      supabaseRest("/stock_transactions?select=part_id,tx_type,qty,is_b_grade"),
+    ]);
+    const [partsText, txText] = await Promise.all([partsRes.text(), txRes.text()]);
+    if (!partsRes.ok || !txRes.ok) {
+      return NextResponse.json({ error: partsText || txText }, { status: partsRes.ok ? txRes.status : partsRes.status });
     }
-    return NextResponse.json({ data: JSON.parse(text) });
+
+    const parts = JSON.parse(partsText) as Array<{
+      id: string;
+      current_stock: number;
+      [key: string]: unknown;
+    }>;
+    const txRows = JSON.parse(txText) as Array<{
+      part_id: string;
+      tx_type: "IN" | "OUT" | "ADJUST";
+      qty: number;
+      is_b_grade?: boolean;
+    }>;
+
+    const stockMap = new Map<string, { normal: number; bGrade: number; hasTx: boolean }>();
+    for (const tx of txRows) {
+      const current = stockMap.get(tx.part_id) || { normal: 0, bGrade: 0, hasTx: false };
+      current.hasTx = true;
+      if (tx.tx_type === "IN") {
+        if (tx.is_b_grade) current.bGrade += Number(tx.qty || 0);
+        else current.normal += Number(tx.qty || 0);
+      } else if (tx.tx_type === "OUT") {
+        if (tx.is_b_grade) current.bGrade -= Number(tx.qty || 0);
+        else current.normal -= Number(tx.qty || 0);
+      }
+      stockMap.set(tx.part_id, current);
+    }
+
+    const data = parts.map((part) => {
+      const breakdown = stockMap.get(part.id);
+      const total = Number(part.current_stock || 0);
+      if (!breakdown || !breakdown.hasTx) {
+        return { ...part, normal_stock: total, b_grade_stock: 0 };
+      }
+
+      let normalStock = Number(breakdown.normal || 0);
+      let bGradeStock = Number(breakdown.bGrade || 0);
+      const diff = total - (normalStock + bGradeStock);
+      if (diff !== 0) {
+        normalStock += diff;
+      }
+
+      return {
+        ...part,
+        normal_stock: normalStock,
+        b_grade_stock: bGradeStock,
+      };
+    });
+
+    return NextResponse.json({ data });
   } catch (error) {
     return NextResponse.json(
       {
