@@ -408,6 +408,45 @@ th {
   font-size: 0.9rem;
 }
 
+.locationPreview {
+  position: relative;
+  display: inline-flex;
+}
+
+.locationButton {
+  min-height: 28px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid #d5ddd9;
+  background: #f4f8f6;
+  color: #35554f;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.locationPopover {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 8px);
+  z-index: 30;
+  min-width: 160px;
+  max-width: 220px;
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 253, 250, 0.98);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
+}
+
+.locationImage {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+}
+
 .badgeRow {
   display: flex;
   gap: 8px;

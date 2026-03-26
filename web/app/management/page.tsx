@@ -41,6 +41,8 @@ type TxEditForm = {
   isBGrade: boolean;
 };
 
+const LOCATION_IMAGE_MAP: Record<string, string> = {};
+
 function formatDateInput(value?: string | Date) {
   const date = value ? new Date(value) : new Date();
   const adjusted = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
@@ -88,6 +90,35 @@ function formatSplitStock(part: Part) {
 function formatTransactionSplitQty(tx: StockTransaction) {
   const qty = Number(tx.qty || 0);
   return tx.is_b_grade ? `0 (B급 ${qty})` : `${qty} (B급 0)`;
+}
+
+function LocationPreview({ position }: { position: string | null | undefined }) {
+  const [open, setOpen] = useState(false);
+  const normalized = (position || "").trim().toUpperCase();
+  const imageSrc = normalized ? LOCATION_IMAGE_MAP[normalized] : undefined;
+
+  if (!normalized) {
+    return <span>-</span>;
+  }
+
+  return (
+    <span
+      className="locationPreview"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <button className="locationButton" type="button" onClick={() => setOpen((value) => !value)}>
+        {normalized}
+      </button>
+      {open ? (
+        <span className="locationPopover">
+          <strong>{normalized}</strong>
+          <span className="meta">등록 위치</span>
+          {imageSrc ? <img src={imageSrc} alt={`${normalized} 위치`} className="locationImage" /> : <span className="meta">위치 이미지는 아직 등록되지 않았습니다.</span>}
+        </span>
+      ) : null}
+    </span>
+  );
 }
 
 export default function ManagementPage() {
@@ -1145,7 +1176,7 @@ export default function ManagementPage() {
                       <div className="kvGrid">
                         <div>
                           <span className="meta">위치</span>
-                          <div>{part.position || "-"}</div>
+                          <div><LocationPreview position={part.position} /></div>
                         </div>
                         <div>
                           <span className="meta">최소재고</span>
@@ -1194,7 +1225,7 @@ export default function ManagementPage() {
                         <td>{part.designation}</td>
                         <td className={isPartLow(part, minimumStockValue) ? "low" : undefined}>{formatSplitStock(part)}</td>
                         <td>{part.unit_of_quantity || "-"}</td>
-                        <td>{part.position || "-"}</td>
+                        <td><LocationPreview position={part.position} /></td>
                         {isAdmin ? (
                           <td>
                             <div className="actions">
@@ -1472,7 +1503,7 @@ export default function ManagementPage() {
                     <div className="kvGrid">
                       <div>
                         <span className="meta">위치</span>
-                        <div>{part.position || "-"}</div>
+                        <div><LocationPreview position={part.position} /></div>
                       </div>
                       <div>
                         <span className="meta">최소재고</span>
@@ -1515,7 +1546,7 @@ export default function ManagementPage() {
                         <td>{part.designation}</td>
                         <td>{formatSplitStock(part)}</td>
                         <td>{part.unit_of_quantity || "-"}</td>
-                        <td>{part.position || "-"}</td>
+                        <td><LocationPreview position={part.position} /></td>
                         {isAdmin ? (
                           <td>
                             <div className="actions">
