@@ -41,10 +41,10 @@ type TxEditForm = {
   isBGrade: boolean;
 };
 
-function formatDateTimeLocalInput(value?: string | Date) {
+function formatDateInput(value?: string | Date) {
   const date = value ? new Date(value) : new Date();
   const adjusted = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-  return adjusted.toISOString().slice(0, 16);
+  return adjusted.toISOString().slice(0, 10);
 }
 
 function createEmptyTxForm(): TxForm {
@@ -53,7 +53,7 @@ function createEmptyTxForm(): TxForm {
     txType: "IN",
     qty: "",
     memo: "",
-    txDate: formatDateTimeLocalInput(),
+    txDate: formatDateInput(),
     isBGrade: false,
   };
 }
@@ -663,7 +663,7 @@ export default function ManagementPage() {
     const keyword = txHistorySearch.trim().toLowerCase();
     if (!keyword) return txHistory;
     return txHistory.filter((tx) => {
-      const createdAt = new Date(tx.created_at).toLocaleString("ko-KR").toLowerCase();
+      const createdAt = new Date(tx.created_at).toLocaleDateString("ko-KR").toLowerCase();
       return (
         (tx.parts?.item_number || "").toLowerCase().includes(keyword) ||
         (tx.parts?.designation || "").toLowerCase().includes(keyword) ||
@@ -709,7 +709,7 @@ export default function ManagementPage() {
 
     const qty = Number(txForm.qty);
     const normalizedItemNumber = txForm.itemNumber.trim().toUpperCase();
-    const createdAt = txForm.txDate ? new Date(txForm.txDate) : null;
+    const createdAt = txForm.txDate ? new Date(`${txForm.txDate}T00:00:00`) : null;
     if (!normalizedItemNumber || !Number.isFinite(qty) || qty <= 0) {
       setError("품목번호와 수량을 정확히 입력하세요.");
       return;
@@ -1291,10 +1291,10 @@ export default function ManagementPage() {
               </div>
 
               <div className="formRow">
-                <label className="label">날짜 / 시간</label>
+                <label className="label">날짜</label>
                 <input
                   className="input"
-                  type="datetime-local"
+                  type="date"
                   value={txForm.txDate}
                   onChange={(e) => setTxForm((v) => ({ ...v, txDate: e.target.value }))}
                 />
@@ -1344,7 +1344,7 @@ export default function ManagementPage() {
                       </div>
                       <div>
                         <span className="meta">날짜</span>
-                        <div>{new Date(tx.created_at).toLocaleString("ko-KR")}</div>
+                        <div>{new Date(tx.created_at).toLocaleDateString("ko-KR")}</div>
                       </div>
                       <div>
                         <span className="meta">메모</span>
@@ -1379,7 +1379,7 @@ export default function ManagementPage() {
                       <th>카테고리</th>
                       <th>수량</th>
                       <th>메모</th>
-                      <th>일시</th>
+                      <th>날짜</th>
                       <th>사용자</th>
                       {isAdmin ? <th>관리</th> : null}
                     </tr>
@@ -1395,7 +1395,7 @@ export default function ManagementPage() {
                         <td>{tx.parts?.location || "-"}</td>
                         <td>{formatTransactionSplitQty(tx)}</td>
                         <td>{tx.memo || "-"}</td>
-                        <td>{new Date(tx.created_at).toLocaleString("ko-KR")}</td>
+                        <td>{new Date(tx.created_at).toLocaleDateString("ko-KR")}</td>
                         <td>{tx.actor_name || "-"}</td>
                         {isAdmin ? (
                           <td>
