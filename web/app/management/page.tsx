@@ -182,6 +182,8 @@ export default function ManagementPage() {
   const [savingLocation, setSavingLocation] = useState(false);
   const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null);
   const [deletingLocationId, setDeletingLocationId] = useState<string | null>(null);
+  const [categoryOptionsOpen, setCategoryOptionsOpen] = useState(false);
+  const [locationOptionsOpen, setLocationOptionsOpen] = useState(false);
   const [txEditForm, setTxEditForm] = useState<TxEditForm | null>(null);
   const [txHistorySearch, setTxHistorySearch] = useState("");
 
@@ -2084,74 +2086,110 @@ export default function ManagementPage() {
                   <div className="formRow">
                     <div className="inlineLabelRow">
                       <label className="label">구분</label>
-                      <button className="btn secondary small" type="button" onClick={openCategoryManager}>
-                        구분 관리
-                      </button>
+                      <div className="actions">
+                        <button className="btn secondary small" type="button" onClick={() => setCategoryOptionsOpen((value) => !value)}>
+                          목록
+                        </button>
+                        <button className="btn secondary small" type="button" onClick={openCategoryManager}>
+                          구분 관리
+                        </button>
+                      </div>
                     </div>
-                    <input
-                      className="input"
-                      list="part-category-options"
-                      autoComplete="off"
-                      value={partForm.category}
-                      onChange={(e) => setPartForm((v) => ({ ...v, category: e.target.value.toUpperCase() }))}
-                      placeholder="목록 선택 또는 직접입력"
-                    />
+                    <div
+                      className="autocompleteWrap"
+                      onBlur={() => window.setTimeout(() => setCategoryOptionsOpen(false), 100)}
+                    >
+                      <input
+                        className="input"
+                        list="part-category-options"
+                        autoComplete="off"
+                        value={partForm.category}
+                        onFocus={() => setCategoryOptionsOpen(true)}
+                        onChange={(e) => {
+                          setCategoryOptionsOpen(true);
+                          setPartForm((v) => ({ ...v, category: e.target.value.toUpperCase() }));
+                        }}
+                        placeholder="목록 선택 또는 직접입력"
+                      />
+                      {categoryOptionsOpen && categorySuggestions.length > 0 ? (
+                        <div className="autocompleteDropdown">
+                          {categorySuggestions.map((category) => (
+                            <button
+                              key={category.id}
+                              className={`autocompleteOption${category.name === partForm.category.trim().toUpperCase() ? " active" : ""}`}
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => {
+                                setPartForm((v) => ({ ...v, category: category.name }));
+                                setCategoryOptionsOpen(false);
+                              }}
+                            >
+                              <span>{category.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
                     <datalist id="part-category-options">
                       {categories.map((category) => (
                         <option key={category.id} value={category.name} />
                       ))}
                     </datalist>
-                    {categorySuggestions.length > 0 ? (
-                      <div className="autocompleteList">
-                        {categorySuggestions.map((category) => (
-                          <button
-                            key={category.id}
-                            className={`autocompleteItem${category.name === partForm.category.trim().toUpperCase() ? " active" : ""}`}
-                            type="button"
-                            onClick={() => setPartForm((v) => ({ ...v, category: category.name }))}
-                          >
-                            {category.name}
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
                   </div>
 
                   <div className="formRow">
                     <div className="inlineLabelRow">
                       <label className="label">파트 위치</label>
-                      <button className="btn secondary small" type="button" onClick={openLocationManager}>
-                        위치 관리
-                      </button>
+                      <div className="actions">
+                        <button className="btn secondary small" type="button" onClick={() => setLocationOptionsOpen((value) => !value)}>
+                          목록
+                        </button>
+                        <button className="btn secondary small" type="button" onClick={openLocationManager}>
+                          위치 관리
+                        </button>
+                      </div>
                     </div>
-                    <input
-                      className="input"
-                      list="part-location-options"
-                      autoComplete="off"
-                      value={partForm.position}
-                      onChange={(e) => setPartForm((v) => ({ ...v, position: e.target.value.toUpperCase() }))}
-                      placeholder="목록 선택 또는 직접입력"
-                    />
+                    <div
+                      className="autocompleteWrap"
+                      onBlur={() => window.setTimeout(() => setLocationOptionsOpen(false), 100)}
+                    >
+                      <input
+                        className="input"
+                        list="part-location-options"
+                        autoComplete="off"
+                        value={partForm.position}
+                        onFocus={() => setLocationOptionsOpen(true)}
+                        onChange={(e) => {
+                          setLocationOptionsOpen(true);
+                          setPartForm((v) => ({ ...v, position: e.target.value.toUpperCase() }));
+                        }}
+                        placeholder="목록 선택 또는 직접입력"
+                      />
+                      {locationOptionsOpen && locationSuggestions.length > 0 ? (
+                        <div className="autocompleteDropdown">
+                          {locationSuggestions.map((location) => (
+                            <button
+                              key={location.id}
+                              className={`autocompleteOption${location.code === partForm.position.trim().toUpperCase() ? " active" : ""}`}
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => {
+                                setPartForm((v) => ({ ...v, position: location.code }));
+                                setLocationOptionsOpen(false);
+                              }}
+                            >
+                              <span>{location.code}</span>
+                              <span className="meta">{location.description || "설명 없음"}</span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
                     <datalist id="part-location-options">
                       {locations.map((location) => (
                         <option key={location.id} value={location.code} />
                       ))}
                     </datalist>
-                    {locationSuggestions.length > 0 ? (
-                      <div className="autocompleteList">
-                        {locationSuggestions.map((location) => (
-                          <button
-                            key={location.id}
-                            className={`autocompleteItem${location.code === partForm.position.trim().toUpperCase() ? " active" : ""}`}
-                            type="button"
-                            onClick={() => setPartForm((v) => ({ ...v, position: location.code }))}
-                          >
-                            <span>{location.code}</span>
-                            <span className="meta">{location.description || "설명 없음"}</span>
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
                     {partForm.position.trim() ? (
                       selectedLocationInfo ? (
                         <div className="locationFieldHint">

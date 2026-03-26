@@ -508,26 +508,44 @@ th {
   flex-wrap: wrap;
 }
 
-.autocompleteList {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+.autocompleteWrap {
+  position: relative;
 }
 
-.autocompleteItem {
-  display: inline-flex;
+.autocompleteDropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  display: grid;
+  gap: 6px;
+  max-height: 240px;
+  overflow: auto;
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(255, 253, 250, 0.98);
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.12);
+}
+
+.autocompleteOption {
+  display: flex;
   align-items: center;
-  gap: 8px;
-  min-height: 32px;
-  padding: 6px 10px;
-  border-radius: 999px;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border-radius: 10px;
   border: 1px solid #d5ddd9;
   background: #f8fbfa;
   color: #35554f;
+  text-align: left;
   cursor: pointer;
 }
 
-.autocompleteItem.active {
+.autocompleteOption.active {
   border-color: #7ab7aa;
   background: #e7f3ef;
 }
