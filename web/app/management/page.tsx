@@ -1620,7 +1620,7 @@ export default function ManagementPage() {
 
       {stockModalOpen ? (
         <div className="scannerOverlay" role="dialog" aria-modal="true" aria-label="입고 등록 품목 전체 보기">
-          <div className="scannerModal">
+          <div className="scannerModal stockModal">
             <div className="adminHeaderRow" style={{ marginBottom: 8 }}>
               <h2 style={{ margin: 0 }}>입고 등록된 전체 품목</h2>
               <div className="actions">
@@ -1686,7 +1686,7 @@ export default function ManagementPage() {
                 {!loading && filteredInboundParts.length === 0 ? <div className="panelNotice">조건에 맞는 입고 등록 품목이 없습니다.</div> : null}
               </div>
             ) : (
-              <div className="historyWrap">
+              <div className="historyWrap stockHistoryWrap">
                 <table className="historyTable">
                   <thead>
                     <tr>

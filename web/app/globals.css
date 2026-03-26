@@ -542,6 +542,19 @@ th {
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.18);
 }
 
+.stockModal {
+  width: min(1180px, calc(100vw - 32px));
+  max-height: 88vh;
+  overflow: visible;
+}
+
+.stockHistoryWrap {
+  overflow-x: auto;
+  overflow-y: visible;
+  max-height: 62vh;
+  padding-bottom: 120px;
+}
+
 .scannerGuide {
   margin-bottom: 8px;
   padding: 8px 10px;
@@ -710,6 +723,18 @@ th {
     border-bottom: none;
     padding: 12px;
     max-height: 90svh;
+    overflow: auto;
+  }
+
+  .stockModal {
+    width: 100%;
+    max-height: 90svh;
+    overflow: auto;
+  }
+
+  .stockHistoryWrap {
+    max-height: none;
+    padding-bottom: 0;
     overflow: auto;
   }
 
