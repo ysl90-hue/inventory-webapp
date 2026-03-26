@@ -1989,11 +1989,12 @@ export default function ManagementPage() {
 
       {activeTab === "admin" ? (
         isAdmin ? (
-          <div className="grid">
-            <section className="panel">
-              <div className="adminBlock">
-                <div className="adminHeaderRow">
-                  <h2 style={{ margin: 0 }}>등록 관리</h2>
+          <div className="grid adminLayout">
+            <section className="panel adminMainPanel">
+              <div className="adminPanelHead">
+                <div>
+                  <h2>{partForm.id ? "품종 수정" : "품종 등록"}</h2>
+                  <p className="subtleNote">주요 등록 항목을 한 곳에서 바로 입력하고, 필요할 때만 구분/위치 관리를 열 수 있습니다.</p>
                 </div>
                 <div className="actions">
                   <button className="btn secondary" type="button" onClick={openCategoryManager}>
@@ -2008,33 +2009,8 @@ export default function ManagementPage() {
                   <span className="softBadge">위치 {locations.length}개</span>
                 </div>
               </div>
-
-              <div className="adminBlock">
-                <div className="formRow" style={{ marginBottom: 14 }}>
-                  <label className="label">global minimum stock (전 제품 공통)</label>
-                  <div className="actions">
-                    <input
-                      className="input"
-                      type="number"
-                      inputMode="decimal"
-                      autoComplete="off"
-                      step="0.01"
-                      value={globalMinimumStock}
-                      onChange={(e) => setGlobalMinimumStock(e.target.value)}
-                      style={{ width: isMobileLayout ? "100%" : 180 }}
-                    />
-                    <button className="btn secondary small" type="button" onClick={saveGlobalMinimumStock}>
-                      기준 저장
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <section className="panel">
-              <h2>{partForm.id ? "품종 수정" : "품종 등록"}</h2>
               <form onSubmit={submitPart}>
-                <div className="formGrid">
+                <div className="formGrid formGridWide">
                   <div className="formRow">
                     <label className="label">품목번호</label>
                     <input
@@ -2091,14 +2067,9 @@ export default function ManagementPage() {
                   <div className="formRow">
                     <div className="inlineLabelRow">
                       <label className="label">구분</label>
-                      <div className="actions">
-                        <button className="btn secondary small" type="button" onClick={() => setCategoryOptionsOpen((value) => !value)}>
-                          목록
-                        </button>
-                        <button className="btn secondary small" type="button" onClick={openCategoryManager}>
-                          구분 관리
-                        </button>
-                      </div>
+                      <button className="btn secondary small" type="button" onClick={() => setCategoryOptionsOpen((value) => !value)}>
+                        목록
+                      </button>
                     </div>
                     <div
                       className="autocompleteWrap"
@@ -2145,14 +2116,9 @@ export default function ManagementPage() {
                   <div className="formRow">
                     <div className="inlineLabelRow">
                       <label className="label">파트 위치</label>
-                      <div className="actions">
-                        <button className="btn secondary small" type="button" onClick={() => setLocationOptionsOpen((value) => !value)}>
-                          목록
-                        </button>
-                        <button className="btn secondary small" type="button" onClick={openLocationManager}>
-                          위치 관리
-                        </button>
-                      </div>
+                      <button className="btn secondary small" type="button" onClick={() => setLocationOptionsOpen((value) => !value)}>
+                        목록
+                      </button>
                     </div>
                     <div
                       className="autocompleteWrap"
@@ -2206,7 +2172,6 @@ export default function ManagementPage() {
                       )
                     ) : null}
                   </div>
-
                 </div>
 
                 <div className={`actions ${isMobileLayout ? "stickyActionBar" : ""}`}>
@@ -2218,6 +2183,34 @@ export default function ManagementPage() {
                   </button>
                 </div>
               </form>
+            </section>
+
+            <section className="panel adminSidePanel">
+              <div className="adminBlock">
+                <div className="formRow" style={{ marginBottom: 14 }}>
+                  <label className="label">global minimum stock (전 제품 공통)</label>
+                  <div className="actions">
+                    <input
+                      className="input"
+                      type="number"
+                      inputMode="decimal"
+                      autoComplete="off"
+                      step="0.01"
+                      value={globalMinimumStock}
+                      onChange={(e) => setGlobalMinimumStock(e.target.value)}
+                      style={{ width: isMobileLayout ? "100%" : 180 }}
+                    />
+                    <button className="btn secondary small" type="button" onClick={saveGlobalMinimumStock}>
+                      기준 저장
+                    </button>
+                  </div>
+                </div>
+                <div className="categoryChips">
+                  <span className="softBadge">구분 {categories.length}개</span>
+                  <span className="softBadge">위치 {locations.length}개</span>
+                </div>
+                <div className="meta">구분/위치 목록 관리는 품종등록 상단 버튼에서 바로 열 수 있습니다.</div>
+              </div>
             </section>
           </div>
         ) : (

@@ -140,6 +140,10 @@ a {
   min-width: 0;
 }
 
+.adminLayout {
+  grid-template-columns: minmax(0, 1.95fr) minmax(260px, 0.7fr);
+}
+
 .panel {
   background: rgba(255, 253, 250, 0.92);
   border: 1px solid var(--line);
@@ -152,6 +156,18 @@ a {
 .panel h2 {
   margin: 0 0 10px;
   font-size: 1rem;
+}
+
+.adminPanelHead {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.subtleNote {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
 }
 
 .statsGrid {
@@ -293,6 +309,10 @@ th {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px 12px;
+}
+
+.formGridWide {
+  gap: 12px 16px;
 }
 
 .label {
@@ -738,6 +758,10 @@ th {
   }
 
   .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .adminLayout {
     grid-template-columns: 1fr;
   }
 
