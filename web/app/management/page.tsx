@@ -215,6 +215,24 @@ export default function ManagementPage() {
     () => new Map(locations.map((location) => [location.code.toUpperCase(), location])),
     [locations],
   );
+  const selectedLocationInfo = useMemo(() => {
+    const normalized = (partForm.position || "").trim().toUpperCase();
+    if (!normalized) return null;
+    return locationsByCode.get(normalized) || null;
+  }, [locationsByCode, partForm.position]);
+  const categorySuggestions = useMemo(() => {
+    const keyword = (partForm.category || "").trim().toUpperCase();
+    if (!keyword) return categories.slice(0, 6);
+    return categories.filter((category) => category.name.includes(keyword)).slice(0, 6);
+  }, [categories, partForm.category]);
+  const locationSuggestions = useMemo(() => {
+    const keyword = (partForm.position || "").trim().toUpperCase();
+    const rows = locations.filter((location) => {
+      if (!keyword) return true;
+      return location.code.toUpperCase().includes(keyword) || (location.description || "").toUpperCase().includes(keyword);
+    });
+    return rows.slice(0, 6);
+  }, [locations, partForm.position]);
 
   function stopScannerResources() {
     if (scannerCloseTimerRef.current) {
@@ -2083,6 +2101,20 @@ export default function ManagementPage() {
                         <option key={category.id} value={category.name} />
                       ))}
                     </datalist>
+                    {categorySuggestions.length > 0 ? (
+                      <div className="autocompleteList">
+                        {categorySuggestions.map((category) => (
+                          <button
+                            key={category.id}
+                            className={`autocompleteItem${category.name === partForm.category.trim().toUpperCase() ? " active" : ""}`}
+                            type="button"
+                            onClick={() => setPartForm((v) => ({ ...v, category: category.name }))}
+                          >
+                            {category.name}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className="formRow">
@@ -2105,6 +2137,31 @@ export default function ManagementPage() {
                         <option key={location.id} value={location.code} />
                       ))}
                     </datalist>
+                    {locationSuggestions.length > 0 ? (
+                      <div className="autocompleteList">
+                        {locationSuggestions.map((location) => (
+                          <button
+                            key={location.id}
+                            className={`autocompleteItem${location.code === partForm.position.trim().toUpperCase() ? " active" : ""}`}
+                            type="button"
+                            onClick={() => setPartForm((v) => ({ ...v, position: location.code }))}
+                          >
+                            <span>{location.code}</span>
+                            <span className="meta">{location.description || "설명 없음"}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                    {partForm.position.trim() ? (
+                      selectedLocationInfo ? (
+                        <div className="locationFieldHint">
+                          <span className="softBadge">{selectedLocationInfo.code}</span>
+                          <span className="meta">{selectedLocationInfo.description || "설명 없음"}</span>
+                        </div>
+                      ) : (
+                        <div className="meta">등록된 위치 설명이 없는 직접입력 코드입니다.</div>
+                      )
+                    ) : null}
                   </div>
 
                 </div>

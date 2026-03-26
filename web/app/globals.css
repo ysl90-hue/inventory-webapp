@@ -501,6 +501,37 @@ th {
   margin-bottom: 0;
 }
 
+.locationFieldHint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.autocompleteList {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.autocompleteItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid #d5ddd9;
+  background: #f8fbfa;
+  color: #35554f;
+  cursor: pointer;
+}
+
+.autocompleteItem.active {
+  border-color: #7ab7aa;
+  background: #e7f3ef;
+}
+
 .adminBlock {
   border: 1px solid var(--line);
   border-radius: 12px;
