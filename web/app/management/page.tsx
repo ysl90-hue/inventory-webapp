@@ -6,7 +6,7 @@ import type { Session } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { canUseCurrentSession, clearCurrentSessionMarker, getShouldKeepLogin } from "@/lib/auth-session";
 import { normalizeCategory, normalizeUnit, UNIT_OPTIONS } from "@/lib/inventory";
-import type { Part, PartCategory, StockTransaction } from "@/lib/types";
+import type { Part, PartCategory, PartLocation, StockTransaction } from "@/lib/types";
 
 type ActiveTab = "search" | "stock" | "admin";
 
@@ -127,6 +127,7 @@ export default function ManagementPage() {
   const [supabase] = useState(() => createClient());
   const [parts, setParts] = useState<Part[]>([]);
   const [categories, setCategories] = useState<PartCategory[]>([]);
+  const [locations, setLocations] = useState<PartLocation[]>([]);
   const [txHistory, setTxHistory] = useState<StockTransaction[]>([]);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -145,7 +146,9 @@ export default function ManagementPage() {
   const [savingPart, setSavingPart] = useState(false);
   const [savingTxEdit, setSavingTxEdit] = useState(false);
   const [newCategory, setNewCategory] = useState("");
+  const [newLocationCode, setNewLocationCode] = useState("");
   const [savingCategory, setSavingCategory] = useState(false);
+  const [savingLocation, setSavingLocation] = useState(false);
   const [txEditForm, setTxEditForm] = useState<TxEditForm | null>(null);
   const [txHistorySearch, setTxHistorySearch] = useState("");
 
@@ -278,25 +281,28 @@ export default function ManagementPage() {
     setError(null);
 
     try {
-      const [partsRes, txRes, categoriesRes] = await Promise.all([
+      const [partsRes, txRes, categoriesRes, locationsRes] = await Promise.all([
         fetch("/api/parts", { cache: "no-store" }),
         fetch("/api/transactions", {
           cache: "no-store",
           headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
         }),
         fetch("/api/categories", { cache: "no-store" }),
+        fetch("/api/locations", { cache: "no-store" }),
       ]);
 
       const partsJson = (await partsRes.json()) as { data?: Part[]; error?: string };
       const txJson = (await txRes.json()) as { data?: StockTransaction[]; error?: string };
       const categoriesJson = (await categoriesRes.json()) as { data?: PartCategory[]; error?: string };
+      const locationsJson = (await locationsRes.json()) as { data?: PartLocation[]; error?: string };
 
-      if (!partsRes.ok || !txRes.ok || !categoriesRes.ok) {
-        setError(partsJson.error || txJson.error || categoriesJson.error || "Failed to load data");
+      if (!partsRes.ok || !txRes.ok || !categoriesRes.ok || !locationsRes.ok) {
+        setError(partsJson.error || txJson.error || categoriesJson.error || locationsJson.error || "Failed to load data");
       } else {
         setParts(partsJson.data || []);
         setTxHistory(txJson.data || []);
         setCategories(categoriesJson.data || []);
+        setLocations(locationsJson.data || []);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load data");
@@ -340,6 +346,46 @@ export default function ManagementPage() {
         }
       }
       next.sort((a, b) => a.name.localeCompare(b.name));
+      return next;
+    });
+    return normalized;
+  }
+
+  async function createLocation(code: string) {
+    if (!session?.access_token) {
+      throw new Error("관리자 로그인 후 사용하세요.");
+    }
+
+    const normalized = normalizeCategory(code);
+    if (!normalized) {
+      throw new Error("위치 코드를 입력하세요.");
+    }
+
+    const exists = locations.some((location) => location.code === normalized);
+    if (exists) {
+      return normalized;
+    }
+
+    const res = await fetch("/api/locations", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ code: normalized }),
+    });
+    const json = (await res.json()) as { error?: string; data?: PartLocation[] };
+    if (!res.ok) {
+      throw new Error(json.error || "위치 저장에 실패했습니다.");
+    }
+    setLocations((prev) => {
+      const next = [...prev];
+      for (const item of json.data || []) {
+        if (!next.some((location) => location.id === item.id || location.code === item.code)) {
+          next.push(item);
+        }
+      }
+      next.sort((a, b) => a.code.localeCompare(b.code));
       return next;
     });
     return normalized;
@@ -837,6 +883,21 @@ export default function ManagementPage() {
     }
   }
 
+  async function submitLocation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    setSavingLocation(true);
+    try {
+      const created = await createLocation(newLocationCode);
+      setNewLocationCode("");
+      showSuccessToast(`위치 저장 완료: ${created}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "위치 저장에 실패했습니다.");
+    } finally {
+      setSavingLocation(false);
+    }
+  }
+
   async function submitPart(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
@@ -847,11 +908,20 @@ export default function ManagementPage() {
     }
 
     const normalizedCategory = normalizeCategory(partForm.category);
+    const normalizedPosition = buildPartPosition(partForm.position);
     if (normalizedCategory) {
       try {
         await createCategory(normalizedCategory);
       } catch (e) {
         setError(e instanceof Error ? e.message : "구분 저장에 실패했습니다.");
+        return;
+      }
+    }
+    if (normalizedPosition) {
+      try {
+        await createLocation(normalizedPosition);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "위치 저장에 실패했습니다.");
         return;
       }
     }
@@ -866,7 +936,7 @@ export default function ManagementPage() {
       current_stock: Number(partForm.currentStock || 0),
       minimum_stock: Number(globalMinimumStock || partForm.minimumStock || 0),
       location: normalizedCategory,
-      position: buildPartPosition(partForm.position),
+      position: normalizedPosition,
       is_b_grade: partForm.isBGrade,
     };
 
@@ -1602,6 +1672,35 @@ export default function ManagementPage() {
               </div>
 
               <div className="adminBlock">
+                <h2>위치 관리</h2>
+                <form onSubmit={submitLocation}>
+                  <div className="formRow">
+                    <label className="label">새 위치 코드 추가</label>
+                    <div className="actions">
+                      <input
+                        className="input"
+                        autoComplete="off"
+                        value={newLocationCode}
+                        onChange={(e) => setNewLocationCode(e.target.value.toUpperCase())}
+                        placeholder="예: F1 / R2 / A-03"
+                      />
+                      <button className="btn secondary" type="submit" disabled={savingLocation}>
+                        {savingLocation ? "저장 중..." : "위치 저장"}
+                      </button>
+                    </div>
+                  </div>
+                </form>
+                <div className="categoryChips">
+                  {locations.map((location) => (
+                    <span key={location.id} className="softBadge">
+                      {location.code}
+                    </span>
+                  ))}
+                  {locations.length === 0 ? <span className="meta">등록된 위치가 없습니다.</span> : null}
+                </div>
+              </div>
+
+              <div className="adminBlock">
                 <div className="formRow" style={{ marginBottom: 14 }}>
                   <label className="label">global minimum stock (전 제품 공통)</label>
                   <div className="actions">
@@ -1701,11 +1800,17 @@ export default function ManagementPage() {
                     <label className="label">파트 위치</label>
                     <input
                       className="input"
+                      list="part-location-options"
                       autoComplete="off"
                       value={partForm.position}
                       onChange={(e) => setPartForm((v) => ({ ...v, position: e.target.value.toUpperCase() }))}
-                      placeholder="RACK-A1 / LINE-2"
+                      placeholder="목록 선택 또는 직접입력"
                     />
+                    <datalist id="part-location-options">
+                      {locations.map((location) => (
+                        <option key={location.id} value={location.code} />
+                      ))}
+                    </datalist>
                   </div>
 
                 </div>

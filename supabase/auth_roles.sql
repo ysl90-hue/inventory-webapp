@@ -102,6 +102,13 @@ to authenticated
 using (public.is_admin())
 with check (public.is_admin());
 
+drop policy if exists "part locations write" on public.part_locations;
+create policy "part locations write"
+on public.part_locations for all
+to authenticated
+using (public.is_admin())
+with check (public.is_admin());
+
 drop policy if exists "stock tx update admin only" on public.stock_transactions;
 create policy "stock tx update admin only"
 on public.stock_transactions for update

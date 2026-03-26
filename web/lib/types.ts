@@ -41,3 +41,9 @@ export type PartCategory = {
   name: string;
   created_at: string;
 };
+
+export type PartLocation = {
+  id: string;
+  code: string;
+  created_at: string;
+};

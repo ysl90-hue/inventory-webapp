@@ -47,6 +47,15 @@ create table if not exists public.part_categories (
 
 create index if not exists idx_part_categories_name on public.part_categories(name);
 
+create table if not exists public.part_locations (
+  id uuid primary key default gen_random_uuid(),
+  code text not null unique,
+  created_by uuid references auth.users(id),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_part_locations_code on public.part_locations(code);
+
 create index if not exists idx_stock_transactions_part_id_created_at
   on public.stock_transactions(part_id, created_at desc);
 
@@ -141,6 +150,7 @@ $$;
 alter table public.parts enable row level security;
 alter table public.stock_transactions enable row level security;
 alter table public.part_categories enable row level security;
+alter table public.part_locations enable row level security;
 
 -- Basic policies (adjust to your auth strategy)
 drop policy if exists "parts read" on public.parts;
@@ -174,5 +184,11 @@ to anon, authenticated;
 drop policy if exists "part categories read" on public.part_categories;
 create policy "part categories read"
 on public.part_categories for select
+to anon, authenticated
+using (true);
+
+drop policy if exists "part locations read" on public.part_locations;
+create policy "part locations read"
+on public.part_locations for select
 to anon, authenticated
 using (true);
