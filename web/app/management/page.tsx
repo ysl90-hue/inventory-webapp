@@ -958,10 +958,6 @@ export default function ManagementPage() {
           <div className={`statValue ${lowCount > 0 ? "low" : ""}`}>{lowCount}</div>
         </div>
         <div className="statCard">
-          <div className="meta">등록된 구분</div>
-          <div className="statValue">{categories.length}</div>
-        </div>
-        <div className="statCard">
           <div className="meta">레이아웃</div>
           <div className="statValue">{isMobileLayout ? "Mobile" : "Desktop"}</div>
         </div>
@@ -973,9 +969,6 @@ export default function ManagementPage() {
             {authDisplayName || session.user.email?.split("@")[0] || "Logged in"} {"·"} <strong>{isAdmin ? "ADMIN" : "USER"}</strong>
           </div>
           <div className="actions">
-            <button className="btn secondary small" type="button" onClick={() => setStockModalOpen(true)}>
-              입고 등록 파트
-            </button>
             <button className="btn secondary small" type="button" onClick={() => void loadData()}>
               새로고침
             </button>
@@ -994,8 +987,11 @@ export default function ManagementPage() {
           <button className={`tabButton ${activeTab === "stock" ? "active" : ""}`} type="button" onClick={() => setActiveTab("stock")}>
             입출고 처리
           </button>
+          <button className="tabButton" type="button" onClick={() => setStockModalOpen(true)}>
+            입고 등록 파트
+          </button>
           <button className={`tabButton ${activeTab === "admin" ? "active" : ""}`} type="button" onClick={() => setActiveTab("admin")}>
-            관리자도구
+            품종등록
           </button>
         </div>
       </section>
@@ -1612,7 +1608,7 @@ export default function ManagementPage() {
           </div>
         ) : (
           <section className="panel">
-            <div className="panelNotice">관리자도구는 관리자 계정만 사용할 수 있습니다.</div>
+            <div className="panelNotice">품종등록은 관리자 계정만 사용할 수 있습니다.</div>
           </section>
         )
       ) : null}
