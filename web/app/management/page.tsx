@@ -23,7 +23,6 @@ type PartForm = {
   id: string | null;
   itemNumber: string;
   designation: string;
-  quantity: string;
   unitOfQuantity: string;
   currentStock: string;
   minimumStock: string;
@@ -63,7 +62,6 @@ const EMPTY_PART_FORM: PartForm = {
   id: null,
   itemNumber: "",
   designation: "",
-  quantity: "0",
   unitOfQuantity: "EA",
   currentStock: "0",
   minimumStock: "0",
@@ -779,7 +777,6 @@ export default function ManagementPage() {
       id: part.id,
       itemNumber: part.item_number,
       designation: part.designation,
-      quantity: String(part.quantity ?? 0),
       unitOfQuantity: normalizeUnit(part.unit_of_quantity) || "EA",
       currentStock: String(part.current_stock ?? 0),
       minimumStock: String(part.minimum_stock ?? 0),
@@ -833,7 +830,7 @@ export default function ManagementPage() {
     const payload = {
       item_number: partForm.itemNumber.trim().toUpperCase(),
       designation: partForm.designation.trim(),
-      quantity: Number(partForm.quantity || 0),
+      quantity: Number(partForm.currentStock || 0),
       unit_of_quantity: normalizeUnit(partForm.unitOfQuantity),
       current_stock: Number(partForm.currentStock || 0),
       minimum_stock: Number(globalMinimumStock || partForm.minimumStock || 0),
@@ -1264,16 +1261,22 @@ export default function ManagementPage() {
 
               <div className="formRow">
                 <label className="label">수량</label>
-                <input
-                  className="input"
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  step="0.01"
-                  autoComplete="off"
-                  value={txForm.qty}
-                  onChange={(e) => setTxForm((v) => ({ ...v, qty: e.target.value }))}
-                />
+                <div className="inlineFieldRow">
+                  <input
+                    className="input"
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.01"
+                    autoComplete="off"
+                    value={txForm.qty}
+                    onChange={(e) => setTxForm((v) => ({ ...v, qty: e.target.value }))}
+                  />
+                  <label className="checkRow inlineCheck">
+                    <input type="checkbox" checked={txForm.isBGrade} onChange={(e) => setTxForm((v) => ({ ...v, isBGrade: e.target.checked }))} />
+                    B급
+                  </label>
+                </div>
               </div>
 
               <div className="formRow">
@@ -1296,11 +1299,6 @@ export default function ManagementPage() {
                   onChange={(e) => setTxForm((v) => ({ ...v, txDate: e.target.value }))}
                 />
               </div>
-
-              <label className="checkRow" style={{ marginBottom: 12 }}>
-                <input type="checkbox" checked={txForm.isBGrade} onChange={(e) => setTxForm((v) => ({ ...v, isBGrade: e.target.checked }))} />
-                B급
-              </label>
 
               <div className={`actions ${isMobileLayout ? "stickyActionBar" : ""}`}>
                 <button className="btn" type="submit">
@@ -1633,6 +1631,14 @@ export default function ManagementPage() {
                   </div>
 
                   <div className="formRow">
+                    <label className="label">B급 여부</label>
+                    <label className="checkRow">
+                      <input type="checkbox" checked={partForm.isBGrade} onChange={(e) => setPartForm((v) => ({ ...v, isBGrade: e.target.checked }))} />
+                      B급
+                    </label>
+                  </div>
+
+                  <div className="formRow">
                     <label className="label">단위</label>
                     <select className="select" value={partForm.unitOfQuantity} onChange={(e) => setPartForm((v) => ({ ...v, unitOfQuantity: e.target.value }))}>
                       {UNIT_OPTIONS.map((unit) => (
@@ -1671,24 +1677,7 @@ export default function ManagementPage() {
                     />
                   </div>
 
-                  <div className="formRow">
-                    <label className="label">수량</label>
-                    <input
-                      className="input"
-                      type="number"
-                      inputMode="decimal"
-                      autoComplete="off"
-                      step="0.01"
-                      value={partForm.quantity}
-                      onChange={(e) => setPartForm((v) => ({ ...v, quantity: e.target.value }))}
-                    />
-                  </div>
                 </div>
-
-                <label className="checkRow" style={{ marginBottom: 12 }}>
-                  <input type="checkbox" checked={partForm.isBGrade} onChange={(e) => setPartForm((v) => ({ ...v, isBGrade: e.target.checked }))} />
-                  B급
-                </label>
 
                 <div className={`actions ${isMobileLayout ? "stickyActionBar" : ""}`}>
                   <button className="btn" type="submit" disabled={savingPart}>

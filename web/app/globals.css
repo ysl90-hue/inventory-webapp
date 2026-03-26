@@ -276,6 +276,19 @@ th {
   margin-bottom: 10px;
 }
 
+.inlineFieldRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.inlineCheck {
+  min-height: 40px;
+  padding: 0 4px;
+  white-space: nowrap;
+}
+
 .formGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -586,6 +599,10 @@ th {
   }
 
   .modalToolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .inlineFieldRow {
     grid-template-columns: 1fr;
   }
 
