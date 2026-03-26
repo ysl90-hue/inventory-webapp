@@ -50,11 +50,20 @@ create index if not exists idx_part_categories_name on public.part_categories(na
 create table if not exists public.part_locations (
   id uuid primary key default gen_random_uuid(),
   code text not null unique,
+  description text,
+  image_url text,
   created_by uuid references auth.users(id),
   created_at timestamptz not null default now()
 );
 
+alter table public.part_locations add column if not exists description text;
+alter table public.part_locations add column if not exists image_url text;
+
 create index if not exists idx_part_locations_code on public.part_locations(code);
+
+insert into storage.buckets (id, name, public)
+values ('part-location-images', 'part-location-images', true)
+on conflict (id) do nothing;
 
 create index if not exists idx_stock_transactions_part_id_created_at
   on public.stock_transactions(part_id, created_at desc);

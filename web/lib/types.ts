@@ -45,5 +45,7 @@ export type PartCategory = {
 export type PartLocation = {
   id: string;
   code: string;
+  description: string | null;
+  image_url: string | null;
   created_at: string;
 };

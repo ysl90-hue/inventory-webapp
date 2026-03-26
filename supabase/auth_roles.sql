@@ -109,6 +109,31 @@ to authenticated
 using (public.is_admin())
 with check (public.is_admin());
 
+drop policy if exists "location images public read" on storage.objects;
+create policy "location images public read"
+on storage.objects for select
+to anon, authenticated
+using (bucket_id = 'part-location-images');
+
+drop policy if exists "location images admin insert" on storage.objects;
+create policy "location images admin insert"
+on storage.objects for insert
+to authenticated
+with check (bucket_id = 'part-location-images' and public.is_admin());
+
+drop policy if exists "location images admin update" on storage.objects;
+create policy "location images admin update"
+on storage.objects for update
+to authenticated
+using (bucket_id = 'part-location-images' and public.is_admin())
+with check (bucket_id = 'part-location-images' and public.is_admin());
+
+drop policy if exists "location images admin delete" on storage.objects;
+create policy "location images admin delete"
+on storage.objects for delete
+to authenticated
+using (bucket_id = 'part-location-images' and public.is_admin());
+
 drop policy if exists "stock tx update admin only" on public.stock_transactions;
 create policy "stock tx update admin only"
 on public.stock_transactions for update

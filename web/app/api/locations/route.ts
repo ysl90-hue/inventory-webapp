@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 
 export async function GET() {
   try {
-    const res = await supabaseRest("/part_locations?select=id,code,created_at&order=code.asc");
+    const res = await supabaseRest("/part_locations?select=id,code,description,image_url,created_at&order=code.asc");
     const text = await res.text();
     if (!res.ok) {
       return NextResponse.json({ error: text }, { status: res.status });
@@ -24,8 +24,10 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const me = await requireAdmin(req);
-    const body = (await req.json()) as { code?: string };
+    const body = (await req.json()) as { code?: string; description?: string | null; image_url?: string | null };
     const code = normalizeCategory(body.code);
+    const description = body.description?.trim() || null;
+    const imageUrl = body.image_url?.trim() || null;
 
     if (!code) {
       return NextResponse.json({ error: "위치 코드를 입력하세요." }, { status: 400 });
@@ -38,6 +40,8 @@ export async function POST(req: Request) {
       },
       body: JSON.stringify({
         code,
+        description,
+        image_url: imageUrl,
         created_by: me.userId,
       }),
     });

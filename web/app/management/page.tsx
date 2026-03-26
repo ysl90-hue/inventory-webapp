@@ -41,8 +41,6 @@ type TxEditForm = {
   isBGrade: boolean;
 };
 
-const LOCATION_IMAGE_MAP: Record<string, string> = {};
-
 function formatDateInput(value?: string | Date) {
   const date = value ? new Date(value) : new Date();
   const adjusted = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
@@ -92,10 +90,17 @@ function formatTransactionSplitQty(tx: StockTransaction) {
   return tx.is_b_grade ? `0 (B급 ${qty})` : `${qty} (B급 0)`;
 }
 
-function LocationPreview({ position }: { position: string | null | undefined }) {
+function LocationPreview({
+  position,
+  description,
+  imageUrl,
+}: {
+  position: string | null | undefined;
+  description?: string | null;
+  imageUrl?: string | null;
+}) {
   const [open, setOpen] = useState(false);
   const normalized = (position || "").trim().toUpperCase();
-  const imageSrc = normalized ? LOCATION_IMAGE_MAP[normalized] : undefined;
 
   if (!normalized) {
     return <span>-</span>;
@@ -113,8 +118,8 @@ function LocationPreview({ position }: { position: string | null | undefined }) 
       {open ? (
         <span className="locationPopover">
           <strong>{normalized}</strong>
-          <span className="meta">등록 위치</span>
-          {imageSrc ? <img src={imageSrc} alt={`${normalized} 위치`} className="locationImage" /> : <span className="meta">위치 이미지는 아직 등록되지 않았습니다.</span>}
+          <span className="meta">{description || "설명 없음"}</span>
+          {imageUrl ? <img src={imageUrl} alt={`${normalized} 위치`} className="locationImage" /> : <span className="meta">위치 이미지는 아직 등록되지 않았습니다.</span>}
         </span>
       ) : null}
     </span>
@@ -147,6 +152,7 @@ export default function ManagementPage() {
   const [savingTxEdit, setSavingTxEdit] = useState(false);
   const [newCategory, setNewCategory] = useState("");
   const [newLocationCode, setNewLocationCode] = useState("");
+  const [newLocationDescription, setNewLocationDescription] = useState("");
   const [savingCategory, setSavingCategory] = useState(false);
   const [savingLocation, setSavingLocation] = useState(false);
   const [txEditForm, setTxEditForm] = useState<TxEditForm | null>(null);
@@ -172,11 +178,16 @@ export default function ManagementPage() {
   const scannerCloseTimerRef = useRef<number | null>(null);
   const scannerLastAcceptedRef = useRef<{ value: string; at: number } | null>(null);
   const scannerPendingValueRef = useRef<string | null>(null);
+  const locationFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const isAdmin = authRole === "admin";
   const deferredSearchInput = useDeferredValue(searchInput);
   const minimumStockValue = Number(globalMinimumStock || 0);
   const minimumStockLabel = minimumStockValue > 0 ? String(minimumStockValue) : null;
+  const locationsByCode = useMemo(
+    () => new Map(locations.map((location) => [location.code.toUpperCase(), location])),
+    [locations],
+  );
 
   function stopScannerResources() {
     if (scannerCloseTimerRef.current) {
@@ -351,12 +362,73 @@ export default function ManagementPage() {
     return normalized;
   }
 
-  async function createLocation(code: string) {
+  async function resizeLocationImage(file: File) {
+    if (!file.type.startsWith("image/")) {
+      throw new Error("이미지 파일만 업로드할 수 있습니다.");
+    }
+
+    const imageUrl = URL.createObjectURL(file);
+    try {
+      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error("이미지를 불러오지 못했습니다."));
+        img.src = imageUrl;
+      });
+
+      const maxSize = 1200;
+      const ratio = Math.min(1, maxSize / Math.max(image.width, image.height));
+      const width = Math.max(1, Math.round(image.width * ratio));
+      const height = Math.max(1, Math.round(image.height * ratio));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        throw new Error("이미지 처리에 실패했습니다.");
+      }
+      ctx.drawImage(image, 0, 0, width, height);
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
+      if (!blob) {
+        throw new Error("이미지 압축에 실패했습니다.");
+      }
+      return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" });
+    } finally {
+      URL.revokeObjectURL(imageUrl);
+    }
+  }
+
+  async function uploadLocationImage(code: string, file: File) {
+    const normalizedCode = normalizeCategory(code);
+    if (!normalizedCode) {
+      throw new Error("위치 코드를 먼저 입력하세요.");
+    }
+
+    const optimizedFile = await resizeLocationImage(file);
+    const safeFileName = `${normalizedCode}-${Date.now()}.jpg`;
+    const filePath = `locations/${safeFileName}`;
+    const { error: uploadError } = await supabase.storage
+      .from("part-location-images")
+      .upload(filePath, optimizedFile, {
+        cacheControl: "3600",
+        contentType: "image/jpeg",
+        upsert: true,
+      });
+
+    if (uploadError) {
+      throw new Error(`위치 이미지 업로드 실패: ${uploadError.message}`);
+    }
+
+    const { data } = supabase.storage.from("part-location-images").getPublicUrl(filePath);
+    return data.publicUrl;
+  }
+
+  async function createLocation(input: { code: string; description?: string | null; imageUrl?: string | null }) {
     if (!session?.access_token) {
       throw new Error("관리자 로그인 후 사용하세요.");
     }
 
-    const normalized = normalizeCategory(code);
+    const normalized = normalizeCategory(input.code);
     if (!normalized) {
       throw new Error("위치 코드를 입력하세요.");
     }
@@ -372,7 +444,11 @@ export default function ManagementPage() {
         "Content-Type": "application/json",
         Authorization: `Bearer ${session.access_token}`,
       },
-      body: JSON.stringify({ code: normalized }),
+      body: JSON.stringify({
+        code: normalized,
+        description: input.description?.trim() || null,
+        image_url: input.imageUrl?.trim() || null,
+      }),
     });
     const json = (await res.json()) as { error?: string; data?: PartLocation[] };
     if (!res.ok) {
@@ -888,8 +964,18 @@ export default function ManagementPage() {
     setError(null);
     setSavingLocation(true);
     try {
-      const created = await createLocation(newLocationCode);
+      const file = locationFileInputRef.current?.files?.[0] || null;
+      const imageUrl = file ? await uploadLocationImage(newLocationCode, file) : null;
+      const created = await createLocation({
+        code: newLocationCode,
+        description: newLocationDescription,
+        imageUrl,
+      });
       setNewLocationCode("");
+      setNewLocationDescription("");
+      if (locationFileInputRef.current) {
+        locationFileInputRef.current.value = "";
+      }
       showSuccessToast(`위치 저장 완료: ${created}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "위치 저장에 실패했습니다.");
@@ -919,7 +1005,7 @@ export default function ManagementPage() {
     }
     if (normalizedPosition) {
       try {
-        await createLocation(normalizedPosition);
+        await createLocation({ code: normalizedPosition });
       } catch (e) {
         setError(e instanceof Error ? e.message : "위치 저장에 실패했습니다.");
         return;
@@ -1231,6 +1317,7 @@ export default function ManagementPage() {
               <div className="partsCards">
                 {filteredParts.map((part) => {
                   const low = isPartLow(part, minimumStockValue);
+                  const locationInfo = locationsByCode.get((part.position || "").toUpperCase());
                   return (
                     <article key={part.id} className="dataCard">
                       <div className="dataCardHead">
@@ -1246,7 +1333,7 @@ export default function ManagementPage() {
                       <div className="kvGrid">
                         <div>
                           <span className="meta">위치</span>
-                          <div><LocationPreview position={part.position} /></div>
+                          <div><LocationPreview position={part.position} description={locationInfo?.description} imageUrl={locationInfo?.image_url} /></div>
                         </div>
                         <div>
                           <span className="meta">최소재고</span>
@@ -1288,14 +1375,16 @@ export default function ManagementPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredParts.map((part) => (
+                    {filteredParts.map((part) => {
+                      const locationInfo = locationsByCode.get((part.position || "").toUpperCase());
+                      return (
                       <tr key={part.id}>
                         <td>{part.location || "-"}</td>
                         <td>{part.item_number}</td>
                         <td>{part.designation}</td>
                         <td className={isPartLow(part, minimumStockValue) ? "low" : undefined}>{formatSplitStock(part)}</td>
                         <td>{part.unit_of_quantity || "-"}</td>
-                        <td><LocationPreview position={part.position} /></td>
+                        <td><LocationPreview position={part.position} description={locationInfo?.description} imageUrl={locationInfo?.image_url} /></td>
                         {isAdmin ? (
                           <td>
                             <div className="actions">
@@ -1309,7 +1398,7 @@ export default function ManagementPage() {
                           </td>
                         ) : null}
                       </tr>
-                    ))}
+                    )})}
                     {!loading && search.trim().length === 0 ? (
                       <tr>
                         <td colSpan={isAdmin ? 7 : 6}>검색어를 입력하면 결과가 표시됩니다.</td>
@@ -1558,7 +1647,9 @@ export default function ManagementPage() {
             </div>
             {isMobileLayout ? (
               <div className="partsCards">
-                {filteredInboundParts.map((part) => (
+                {filteredInboundParts.map((part) => {
+                  const locationInfo = locationsByCode.get((part.position || "").toUpperCase());
+                  return (
                   <article key={part.id} className="dataCard">
                     <div className="dataCardHead">
                       <strong>{part.location || "구분 없음"}</strong>
@@ -1573,7 +1664,7 @@ export default function ManagementPage() {
                     <div className="kvGrid">
                       <div>
                         <span className="meta">위치</span>
-                        <div><LocationPreview position={part.position} /></div>
+                        <div><LocationPreview position={part.position} description={locationInfo?.description} imageUrl={locationInfo?.image_url} /></div>
                       </div>
                       <div>
                         <span className="meta">최소재고</span>
@@ -1591,7 +1682,7 @@ export default function ManagementPage() {
                       </div>
                     ) : null}
                   </article>
-                ))}
+                )})}
                 {!loading && filteredInboundParts.length === 0 ? <div className="panelNotice">조건에 맞는 입고 등록 품목이 없습니다.</div> : null}
               </div>
             ) : (
@@ -1609,14 +1700,16 @@ export default function ManagementPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredInboundParts.map((part) => (
+                    {filteredInboundParts.map((part) => {
+                      const locationInfo = locationsByCode.get((part.position || "").toUpperCase());
+                      return (
                       <tr key={part.id}>
                         <td>{part.location || "-"}</td>
                         <td>{part.item_number}</td>
                         <td>{part.designation}</td>
                         <td>{formatSplitStock(part)}</td>
                         <td>{part.unit_of_quantity || "-"}</td>
-                        <td><LocationPreview position={part.position} /></td>
+                        <td><LocationPreview position={part.position} description={locationInfo?.description} imageUrl={locationInfo?.image_url} /></td>
                         {isAdmin ? (
                           <td>
                             <div className="actions">
@@ -1630,7 +1723,7 @@ export default function ManagementPage() {
                           </td>
                         ) : null}
                       </tr>
-                    ))}
+                    )})}
                     {!loading && filteredInboundParts.length === 0 ? (
                       <tr>
                         <td colSpan={isAdmin ? 7 : 6}>조건에 맞는 입고 등록 품목이 없습니다.</td>
@@ -1676,18 +1769,33 @@ export default function ManagementPage() {
                 <form onSubmit={submitLocation}>
                   <div className="formRow">
                     <label className="label">새 위치 코드 추가</label>
-                    <div className="actions">
-                      <input
-                        className="input"
-                        autoComplete="off"
-                        value={newLocationCode}
-                        onChange={(e) => setNewLocationCode(e.target.value.toUpperCase())}
-                        placeholder="예: F1 / R2 / A-03"
-                      />
-                      <button className="btn secondary" type="submit" disabled={savingLocation}>
-                        {savingLocation ? "저장 중..." : "위치 저장"}
-                      </button>
-                    </div>
+                    <input
+                      className="input"
+                      autoComplete="off"
+                      value={newLocationCode}
+                      onChange={(e) => setNewLocationCode(e.target.value.toUpperCase())}
+                      placeholder="예: F1 / R2 / A-03"
+                    />
+                  </div>
+                  <div className="formRow">
+                    <label className="label">위치 설명</label>
+                    <input
+                      className="input"
+                      autoComplete="off"
+                      value={newLocationDescription}
+                      onChange={(e) => setNewLocationDescription(e.target.value)}
+                      placeholder="예: 전면 좌측 상단"
+                    />
+                  </div>
+                  <div className="formRow">
+                    <label className="label">위치 사진</label>
+                    <input ref={locationFileInputRef} className="input fileInput" type="file" accept="image/*" />
+                    <div className="meta">이미지는 업로드 시 자동으로 줄여서 저장합니다.</div>
+                  </div>
+                  <div className="actions">
+                    <button className="btn secondary" type="submit" disabled={savingLocation}>
+                      {savingLocation ? "저장 중..." : "위치 저장"}
+                    </button>
                   </div>
                 </form>
                 <div className="categoryChips">
