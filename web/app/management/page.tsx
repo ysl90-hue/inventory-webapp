@@ -224,13 +224,18 @@ export default function ManagementPage() {
   }, [locationsByCode, partForm.position]);
   const categorySuggestions = useMemo(() => {
     const keyword = (partForm.category || "").trim().toUpperCase();
-    if (!keyword) return categories.slice(0, 6);
+    if (!keyword || categories.some((category) => category.name === keyword)) return categories.slice(0, 8);
     return categories.filter((category) => category.name.includes(keyword)).slice(0, 6);
   }, [categories, partForm.category]);
   const locationSuggestions = useMemo(() => {
     const keyword = (partForm.position || "").trim().toUpperCase();
+    const hasExactMatch = locations.some(
+      (location) => location.code.toUpperCase() === keyword || (location.description || "").trim().toUpperCase() === keyword,
+    );
+    if (!keyword || hasExactMatch) {
+      return locations.slice(0, 8);
+    }
     const rows = locations.filter((location) => {
-      if (!keyword) return true;
       return location.code.toUpperCase().includes(keyword) || (location.description || "").toUpperCase().includes(keyword);
     });
     return rows.slice(0, 6);
