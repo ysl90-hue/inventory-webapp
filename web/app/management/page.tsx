@@ -2076,7 +2076,6 @@ export default function ManagementPage() {
                     >
                       <input
                         className="input"
-                        list="part-category-options"
                         autoComplete="off"
                         value={partForm.category}
                         onFocus={() => setCategoryOptionsOpen(true)}
@@ -2105,11 +2104,6 @@ export default function ManagementPage() {
                         </div>
                       ) : null}
                     </div>
-                    <datalist id="part-category-options">
-                      {categories.map((category) => (
-                        <option key={category.id} value={category.name} />
-                      ))}
-                    </datalist>
                   </div>
 
                   <div className="formRow">
@@ -2125,7 +2119,6 @@ export default function ManagementPage() {
                     >
                       <input
                         className="input"
-                        list="part-location-options"
                         autoComplete="off"
                         value={partForm.position}
                         onFocus={() => setLocationOptionsOpen(true)}
@@ -2155,11 +2148,6 @@ export default function ManagementPage() {
                         </div>
                       ) : null}
                     </div>
-                    <datalist id="part-location-options">
-                      {locations.map((location) => (
-                        <option key={location.id} value={location.code} />
-                      ))}
-                    </datalist>
                     {partForm.position.trim() ? (
                       selectedLocationInfo ? (
                         <div className="locationFieldHint">
