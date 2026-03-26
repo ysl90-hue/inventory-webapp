@@ -489,6 +489,18 @@ th {
   margin-bottom: 10px;
 }
 
+.inlineLabelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.inlineLabelRow .label {
+  margin-bottom: 0;
+}
+
 .adminBlock {
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -546,6 +558,40 @@ th {
   width: min(1180px, calc(100vw - 32px));
   max-height: 88vh;
   overflow: visible;
+}
+
+.manageModal {
+  width: min(760px, calc(100vw - 32px));
+  max-height: 88vh;
+  overflow: auto;
+}
+
+.manageList {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.manageRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(255, 253, 250, 0.8);
+}
+
+.manageRowBody {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.manageImagePreview {
+  margin-top: 8px;
+  max-width: 260px;
 }
 
 .stockHistoryWrap {
@@ -732,6 +778,11 @@ th {
     overflow: auto;
   }
 
+  .manageModal {
+    width: 100%;
+    max-height: 90svh;
+  }
+
   .stockHistoryWrap {
     max-height: none;
     padding-bottom: 0;
@@ -751,6 +802,12 @@ th {
   .authBox {
     width: 100%;
     max-width: 100%;
+  }
+
+  .inlineLabelRow,
+  .manageRow {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .btn {

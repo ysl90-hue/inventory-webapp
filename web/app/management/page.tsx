@@ -31,6 +31,18 @@ type PartForm = {
   isBGrade: boolean;
 };
 
+type CategoryManagerForm = {
+  id: string | null;
+  name: string;
+};
+
+type LocationManagerForm = {
+  id: string | null;
+  code: string;
+  description: string;
+  imageUrl: string | null;
+};
+
 type TxEditForm = {
   id: string;
   itemNumber: string;
@@ -68,6 +80,18 @@ const EMPTY_PART_FORM: PartForm = {
   category: "",
   position: "",
   isBGrade: false,
+};
+
+const EMPTY_CATEGORY_MANAGER_FORM: CategoryManagerForm = {
+  id: null,
+  name: "",
+};
+
+const EMPTY_LOCATION_MANAGER_FORM: LocationManagerForm = {
+  id: null,
+  code: "",
+  description: "",
+  imageUrl: null,
 };
 
 function buildPartPosition(position: string) {
@@ -150,11 +174,14 @@ export default function ManagementPage() {
   const [partForm, setPartForm] = useState<PartForm>(EMPTY_PART_FORM);
   const [savingPart, setSavingPart] = useState(false);
   const [savingTxEdit, setSavingTxEdit] = useState(false);
-  const [newCategory, setNewCategory] = useState("");
-  const [newLocationCode, setNewLocationCode] = useState("");
-  const [newLocationDescription, setNewLocationDescription] = useState("");
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
+  const [locationModalOpen, setLocationModalOpen] = useState(false);
+  const [categoryForm, setCategoryForm] = useState<CategoryManagerForm>(EMPTY_CATEGORY_MANAGER_FORM);
+  const [locationForm, setLocationForm] = useState<LocationManagerForm>(EMPTY_LOCATION_MANAGER_FORM);
   const [savingCategory, setSavingCategory] = useState(false);
   const [savingLocation, setSavingLocation] = useState(false);
+  const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null);
+  const [deletingLocationId, setDeletingLocationId] = useState<string | null>(null);
   const [txEditForm, setTxEditForm] = useState<TxEditForm | null>(null);
   const [txHistorySearch, setTxHistorySearch] = useState("");
 
@@ -362,6 +389,57 @@ export default function ManagementPage() {
     return normalized;
   }
 
+  async function updateCategory(id: string, name: string) {
+    if (!session?.access_token) {
+      throw new Error("관리자 로그인 후 사용하세요.");
+    }
+
+    const normalized = normalizeCategory(name);
+    if (!normalized) {
+      throw new Error("구분명을 입력하세요.");
+    }
+
+    const res = await fetch(`/api/categories/${id}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ name: normalized }),
+    });
+    const json = (await res.json()) as { error?: string; data?: PartCategory[] };
+    if (!res.ok) {
+      throw new Error(json.error || "구분 수정에 실패했습니다.");
+    }
+    setCategories((prev) =>
+      prev
+        .map((item) => {
+          const next = (json.data || []).find((row) => row.id === item.id);
+          return next || item;
+        })
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    );
+    return normalized;
+  }
+
+  async function removeCategory(id: string) {
+    if (!session?.access_token) {
+      throw new Error("관리자 로그인 후 사용하세요.");
+    }
+
+    const res = await fetch(`/api/categories/${id}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+    const json = (await readJsonOrText(res)) as { json: { error?: string } | null; raw: string };
+    if (!res.ok) {
+      throw new Error(json.json?.error || json.raw || "구분 삭제에 실패했습니다.");
+    }
+    setCategories((prev) => prev.filter((item) => item.id !== id));
+  }
+
   async function resizeLocationImage(file: File) {
     if (!file.type.startsWith("image/")) {
       throw new Error("이미지 파일만 업로드할 수 있습니다.");
@@ -465,6 +543,61 @@ export default function ManagementPage() {
       return next;
     });
     return normalized;
+  }
+
+  async function updateLocation(input: { id: string; code: string; description?: string | null; imageUrl?: string | null }) {
+    if (!session?.access_token) {
+      throw new Error("관리자 로그인 후 사용하세요.");
+    }
+
+    const normalized = normalizeCategory(input.code);
+    if (!normalized) {
+      throw new Error("위치 코드를 입력하세요.");
+    }
+
+    const res = await fetch(`/api/locations/${input.id}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        code: normalized,
+        description: input.description?.trim() || null,
+        image_url: input.imageUrl?.trim() || null,
+      }),
+    });
+    const json = (await res.json()) as { error?: string; data?: PartLocation[] };
+    if (!res.ok) {
+      throw new Error(json.error || "위치 수정에 실패했습니다.");
+    }
+    setLocations((prev) =>
+      prev
+        .map((item) => {
+          const next = (json.data || []).find((row) => row.id === item.id);
+          return next || item;
+        })
+        .sort((a, b) => a.code.localeCompare(b.code)),
+    );
+    return normalized;
+  }
+
+  async function removeLocation(id: string) {
+    if (!session?.access_token) {
+      throw new Error("관리자 로그인 후 사용하세요.");
+    }
+
+    const res = await fetch(`/api/locations/${id}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+    const json = (await readJsonOrText(res)) as { json: { error?: string } | null; raw: string };
+    if (!res.ok) {
+      throw new Error(json.json?.error || json.raw || "위치 삭제에 실패했습니다.");
+    }
+    setLocations((prev) => prev.filter((item) => item.id !== id));
   }
 
   useEffect(() => {
@@ -944,14 +1077,65 @@ export default function ManagementPage() {
     setPartForm(EMPTY_PART_FORM);
   }
 
+  function openCategoryManager() {
+    setCategoryForm(EMPTY_CATEGORY_MANAGER_FORM);
+    setCategoryModalOpen(true);
+    setError(null);
+  }
+
+  function openLocationManager() {
+    setLocationForm(EMPTY_LOCATION_MANAGER_FORM);
+    if (locationFileInputRef.current) {
+      locationFileInputRef.current.value = "";
+    }
+    setLocationModalOpen(true);
+    setError(null);
+  }
+
+  function startEditCategory(category: PartCategory) {
+    setCategoryForm({
+      id: category.id,
+      name: category.name,
+    });
+  }
+
+  function startEditLocation(location: PartLocation) {
+    setLocationForm({
+      id: location.id,
+      code: location.code,
+      description: location.description || "",
+      imageUrl: location.image_url,
+    });
+    if (locationFileInputRef.current) {
+      locationFileInputRef.current.value = "";
+    }
+  }
+
+  function resetCategoryForm() {
+    setCategoryForm(EMPTY_CATEGORY_MANAGER_FORM);
+  }
+
+  function resetLocationForm() {
+    setLocationForm(EMPTY_LOCATION_MANAGER_FORM);
+    if (locationFileInputRef.current) {
+      locationFileInputRef.current.value = "";
+    }
+  }
+
   async function submitCategory(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     setSavingCategory(true);
     try {
-      const created = await createCategory(newCategory);
-      setNewCategory("");
-      showSuccessToast(`구분 저장 완료: ${created}`);
+      if (categoryForm.id) {
+        const updated = await updateCategory(categoryForm.id, categoryForm.name);
+        resetCategoryForm();
+        showSuccessToast(`구분 수정 완료: ${updated}`);
+      } else {
+        const created = await createCategory(categoryForm.name);
+        resetCategoryForm();
+        showSuccessToast(`구분 저장 완료: ${created}`);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "구분 저장에 실패했습니다.");
     } finally {
@@ -965,22 +1149,63 @@ export default function ManagementPage() {
     setSavingLocation(true);
     try {
       const file = locationFileInputRef.current?.files?.[0] || null;
-      const imageUrl = file ? await uploadLocationImage(newLocationCode, file) : null;
-      const created = await createLocation({
-        code: newLocationCode,
-        description: newLocationDescription,
-        imageUrl,
-      });
-      setNewLocationCode("");
-      setNewLocationDescription("");
-      if (locationFileInputRef.current) {
-        locationFileInputRef.current.value = "";
+      const imageUrl = file ? await uploadLocationImage(locationForm.code, file) : locationForm.imageUrl;
+      if (locationForm.id) {
+        const updated = await updateLocation({
+          id: locationForm.id,
+          code: locationForm.code,
+          description: locationForm.description,
+          imageUrl,
+        });
+        resetLocationForm();
+        showSuccessToast(`위치 수정 완료: ${updated}`);
+      } else {
+        const created = await createLocation({
+          code: locationForm.code,
+          description: locationForm.description,
+          imageUrl,
+        });
+        resetLocationForm();
+        showSuccessToast(`위치 저장 완료: ${created}`);
       }
-      showSuccessToast(`위치 저장 완료: ${created}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "위치 저장에 실패했습니다.");
     } finally {
       setSavingLocation(false);
+    }
+  }
+
+  async function deleteCategory(category: PartCategory) {
+    if (!window.confirm(`구분 '${category.name}'을(를) 삭제할까요?`)) return;
+    setError(null);
+    setDeletingCategoryId(category.id);
+    try {
+      await removeCategory(category.id);
+      if (categoryForm.id === category.id) {
+        resetCategoryForm();
+      }
+      showSuccessToast(`구분 삭제 완료: ${category.name}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "구분 삭제에 실패했습니다.");
+    } finally {
+      setDeletingCategoryId(null);
+    }
+  }
+
+  async function deleteLocation(location: PartLocation) {
+    if (!window.confirm(`위치 '${location.code}'을(를) 삭제할까요?`)) return;
+    setError(null);
+    setDeletingLocationId(location.id);
+    try {
+      await removeLocation(location.id);
+      if (locationForm.id === location.id) {
+        resetLocationForm();
+      }
+      showSuccessToast(`위치 삭제 완료: ${location.code}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "위치 삭제에 실패했습니다.");
+    } finally {
+      setDeletingLocationId(null);
     }
   }
 
@@ -1742,69 +1967,20 @@ export default function ManagementPage() {
           <div className="grid">
             <section className="panel">
               <div className="adminBlock">
-                <h2>구분 관리</h2>
-                <form onSubmit={submitCategory}>
-                  <div className="formRow">
-                    <label className="label">새 구분 추가</label>
-                    <div className="actions">
-                      <input className="input" autoComplete="off" value={newCategory} onChange={(e) => setNewCategory(e.target.value.toUpperCase())} placeholder="예: FILLER / BLOWER / CAP" />
-                      <button className="btn secondary" type="submit" disabled={savingCategory}>
-                        {savingCategory ? "저장 중..." : "구분 저장"}
-                      </button>
-                    </div>
-                  </div>
-                </form>
-                <div className="categoryChips">
-                  {categories.map((category) => (
-                    <span key={category.id} className="softBadge">
-                      {category.name}
-                    </span>
-                  ))}
-                  {categories.length === 0 ? <span className="meta">등록된 구분이 없습니다.</span> : null}
+                <div className="adminHeaderRow">
+                  <h2 style={{ margin: 0 }}>등록 관리</h2>
                 </div>
-              </div>
-
-              <div className="adminBlock">
-                <h2>위치 관리</h2>
-                <form onSubmit={submitLocation}>
-                  <div className="formRow">
-                    <label className="label">새 위치 코드 추가</label>
-                    <input
-                      className="input"
-                      autoComplete="off"
-                      value={newLocationCode}
-                      onChange={(e) => setNewLocationCode(e.target.value.toUpperCase())}
-                      placeholder="예: F1 / R2 / A-03"
-                    />
-                  </div>
-                  <div className="formRow">
-                    <label className="label">위치 설명</label>
-                    <input
-                      className="input"
-                      autoComplete="off"
-                      value={newLocationDescription}
-                      onChange={(e) => setNewLocationDescription(e.target.value)}
-                      placeholder="예: 전면 좌측 상단"
-                    />
-                  </div>
-                  <div className="formRow">
-                    <label className="label">위치 사진</label>
-                    <input ref={locationFileInputRef} className="input fileInput" type="file" accept="image/*" />
-                    <div className="meta">이미지는 업로드 시 자동으로 줄여서 저장합니다.</div>
-                  </div>
-                  <div className="actions">
-                    <button className="btn secondary" type="submit" disabled={savingLocation}>
-                      {savingLocation ? "저장 중..." : "위치 저장"}
-                    </button>
-                  </div>
-                </form>
+                <div className="actions">
+                  <button className="btn secondary" type="button" onClick={openCategoryManager}>
+                    구분 관리
+                  </button>
+                  <button className="btn secondary" type="button" onClick={openLocationManager}>
+                    위치 관리
+                  </button>
+                </div>
                 <div className="categoryChips">
-                  {locations.map((location) => (
-                    <span key={location.id} className="softBadge">
-                      {location.code}
-                    </span>
-                  ))}
-                  {locations.length === 0 ? <span className="meta">등록된 위치가 없습니다.</span> : null}
+                  <span className="softBadge">구분 {categories.length}개</span>
+                  <span className="softBadge">위치 {locations.length}개</span>
                 </div>
               </div>
 
@@ -1888,7 +2064,12 @@ export default function ManagementPage() {
                   </div>
 
                   <div className="formRow">
-                    <label className="label">구분</label>
+                    <div className="inlineLabelRow">
+                      <label className="label">구분</label>
+                      <button className="btn secondary small" type="button" onClick={openCategoryManager}>
+                        구분 관리
+                      </button>
+                    </div>
                     <input
                       className="input"
                       list="part-category-options"
@@ -1905,7 +2086,12 @@ export default function ManagementPage() {
                   </div>
 
                   <div className="formRow">
-                    <label className="label">파트 위치</label>
+                    <div className="inlineLabelRow">
+                      <label className="label">파트 위치</label>
+                      <button className="btn secondary small" type="button" onClick={openLocationManager}>
+                        위치 관리
+                      </button>
+                    </div>
                     <input
                       className="input"
                       list="part-location-options"
@@ -1939,6 +2125,143 @@ export default function ManagementPage() {
             <div className="panelNotice">품종등록은 관리자 계정만 사용할 수 있습니다.</div>
           </section>
         )
+      ) : null}
+
+      {categoryModalOpen ? (
+        <div className="scannerOverlay" role="dialog" aria-modal="true" aria-label="구분 관리">
+          <div className="scannerModal manageModal">
+            <div className="adminHeaderRow" style={{ marginBottom: 8 }}>
+              <h2 style={{ margin: 0 }}>구분 관리</h2>
+              <button className="btn secondary small" type="button" onClick={() => setCategoryModalOpen(false)}>
+                닫기
+              </button>
+            </div>
+            <form onSubmit={submitCategory}>
+              <div className="formRow">
+                <label className="label">{categoryForm.id ? "구분 수정" : "새 구분 추가"}</label>
+                <input
+                  className="input"
+                  autoComplete="off"
+                  value={categoryForm.name}
+                  onChange={(e) => setCategoryForm((prev) => ({ ...prev, name: e.target.value.toUpperCase() }))}
+                  placeholder="예: FILLER / BLOWER / CAP"
+                />
+              </div>
+              <div className="actions">
+                <button className="btn secondary" type="submit" disabled={savingCategory}>
+                  {savingCategory ? "저장 중..." : categoryForm.id ? "구분 수정" : "구분 저장"}
+                </button>
+                {categoryForm.id ? (
+                  <button className="btn secondary" type="button" onClick={resetCategoryForm}>
+                    새로 등록
+                  </button>
+                ) : null}
+              </div>
+            </form>
+            <div className="manageList">
+              {categories.map((category) => (
+                <div key={category.id} className="manageRow">
+                  <div className="manageRowBody">
+                    <strong>{category.name}</strong>
+                  </div>
+                  <div className="actions">
+                    <button className="btn secondary small" type="button" onClick={() => startEditCategory(category)}>
+                      수정
+                    </button>
+                    <button
+                      className="btn danger small"
+                      type="button"
+                      disabled={deletingCategoryId === category.id}
+                      onClick={() => void deleteCategory(category)}
+                    >
+                      {deletingCategoryId === category.id ? "삭제 중..." : "삭제"}
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {categories.length === 0 ? <div className="panelNotice">등록된 구분이 없습니다.</div> : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {locationModalOpen ? (
+        <div className="scannerOverlay" role="dialog" aria-modal="true" aria-label="위치 관리">
+          <div className="scannerModal manageModal">
+            <div className="adminHeaderRow" style={{ marginBottom: 8 }}>
+              <h2 style={{ margin: 0 }}>위치 관리</h2>
+              <button className="btn secondary small" type="button" onClick={() => setLocationModalOpen(false)}>
+                닫기
+              </button>
+            </div>
+            <form onSubmit={submitLocation}>
+              <div className="formRow">
+                <label className="label">{locationForm.id ? "위치 수정" : "새 위치 코드 추가"}</label>
+                <input
+                  className="input"
+                  autoComplete="off"
+                  value={locationForm.code}
+                  onChange={(e) => setLocationForm((prev) => ({ ...prev, code: e.target.value.toUpperCase() }))}
+                  placeholder="예: F1 / R2 / A-03"
+                />
+              </div>
+              <div className="formRow">
+                <label className="label">위치 설명</label>
+                <input
+                  className="input"
+                  autoComplete="off"
+                  value={locationForm.description}
+                  onChange={(e) => setLocationForm((prev) => ({ ...prev, description: e.target.value }))}
+                  placeholder="예: 전면 좌측 상단"
+                />
+              </div>
+              <div className="formRow">
+                <label className="label">위치 사진</label>
+                <input ref={locationFileInputRef} className="input fileInput" type="file" accept="image/*" />
+                <div className="meta">이미지는 업로드 시 자동으로 줄여서 저장합니다.</div>
+                {locationForm.imageUrl ? (
+                  <div className="manageImagePreview">
+                    <img src={locationForm.imageUrl} alt={`${locationForm.code || "위치"} 미리보기`} className="locationImage" />
+                  </div>
+                ) : null}
+              </div>
+              <div className="actions">
+                <button className="btn secondary" type="submit" disabled={savingLocation}>
+                  {savingLocation ? "저장 중..." : locationForm.id ? "위치 수정" : "위치 저장"}
+                </button>
+                {locationForm.id ? (
+                  <button className="btn secondary" type="button" onClick={resetLocationForm}>
+                    새로 등록
+                  </button>
+                ) : null}
+              </div>
+            </form>
+            <div className="manageList">
+              {locations.map((location) => (
+                <div key={location.id} className="manageRow">
+                  <div className="manageRowBody">
+                    <strong>{location.code}</strong>
+                    <span className="meta">{location.description || "설명 없음"}</span>
+                  </div>
+                  <div className="actions">
+                    <button className="btn secondary small" type="button" onClick={() => startEditLocation(location)}>
+                      수정
+                    </button>
+                    <button
+                      className="btn danger small"
+                      type="button"
+                      disabled={deletingLocationId === location.id}
+                      onClick={() => void deleteLocation(location)}
+                    >
+                      {deletingLocationId === location.id ? "삭제 중..." : "삭제"}
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {locations.length === 0 ? <div className="panelNotice">등록된 위치가 없습니다.</div> : null}
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {txEditForm ? (
