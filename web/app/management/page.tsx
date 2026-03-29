@@ -194,7 +194,7 @@ export default function ManagementPage() {
   const [authChecked, setAuthChecked] = useState(false);
   const [authCheckTimedOut, setAuthCheckTimedOut] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
-  const [scannerTarget, setScannerTarget] = useState<"tx" | "part">("tx");
+  const [scannerTarget, setScannerTarget] = useState<"search" | "tx" | "part">("tx");
   const [scannerError, setScannerError] = useState<string | null>(null);
   const [scannerStatus, setScannerStatus] = useState("카메라를 준비합니다...");
   const [isMobileLayout, setIsMobileLayout] = useState(false);
@@ -1056,7 +1056,7 @@ export default function ManagementPage() {
     await loadData();
   }
 
-  function openScanner(target: "tx" | "part") {
+  function openScanner(target: "search" | "tx" | "part") {
     setScannerError(null);
     setScannerPendingValue(null);
     setScannerTarget(target);
@@ -1065,7 +1065,10 @@ export default function ManagementPage() {
 
   function applyScannerPendingValue() {
     if (!scannerPendingValue) return;
-    if (scannerTarget === "tx") {
+    if (scannerTarget === "search") {
+      setSearchInput(scannerPendingValue);
+      setSearch(scannerPendingValue.trim());
+    } else if (scannerTarget === "tx") {
       setTxForm((v) => ({ ...v, itemNumber: scannerPendingValue }));
     } else {
       setPartForm((v) => ({ ...v, itemNumber: scannerPendingValue }));
@@ -1513,18 +1516,23 @@ export default function ManagementPage() {
         <>
           <section className="toolbarPanel panel" aria-label="검색 및 필터">
             <div className="toolbarSearch">
-              <input
-                className="input"
-                placeholder="품목번호 / 품명 / 구분 / 위치 검색"
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    submitSearch();
-                  }
-                }}
-              />
+              <div className="inlineFieldRow">
+                <input
+                  className="input"
+                  placeholder="품목번호 / 품명 / 구분 / 위치 검색"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      submitSearch();
+                    }
+                  }}
+                />
+                <button className="btn secondary small" type="button" onClick={() => openScanner("search")}>
+                  바코드 스캔
+                </button>
+              </div>
               <button className="btn" type="button" onClick={submitSearch}>
                 검색
               </button>
@@ -2421,7 +2429,7 @@ export default function ManagementPage() {
               <div className="scannerAim" aria-hidden="true" />
             </div>
             <div className="meta" style={{ marginTop: 8 }}>
-              {(scannerTarget === "part" ? "[품종 등록] " : "[입출고] ") + (scannerError || scannerStatus)}
+              {(scannerTarget === "search" ? "[검색] " : scannerTarget === "part" ? "[품종 등록] " : "[입출고] ") + (scannerError || scannerStatus)}
             </div>
             <div className="meta" style={{ marginTop: 4 }}>
               손전등: {scannerTorchSupported ? "지원됨" : "미지원/확인중"}
