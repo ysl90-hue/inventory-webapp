@@ -1688,7 +1688,12 @@ export default function ManagementPage() {
                       <tr key={part.id}>
                         <td>{part.location || "-"}</td>
                         <td>{part.item_number}</td>
-                        <td>{part.designation}</td>
+                        <td>
+                          <button className="textTrigger" type="button" onClick={() => openStockQuickAction(part)}>
+                            {part.designation}
+                          </button>
+                          {part.spare_parts_identifier ? <div className="meta partMemo">{part.spare_parts_identifier}</div> : null}
+                        </td>
                         <td className={isPartLow(part, minimumStockValue) ? "low" : undefined}>{formatSplitStock(part)}</td>
                         <td>{part.unit_of_quantity || "-"}</td>
                         <td><LocationPreview position={part.position} description={locationInfo?.description} imageUrl={locationInfo?.image_url} /></td>
