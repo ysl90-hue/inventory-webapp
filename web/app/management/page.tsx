@@ -23,6 +23,7 @@ type PartForm = {
   id: string | null;
   itemNumber: string;
   designation: string;
+  memo: string;
   unitOfQuantity: string;
   currentStock: string;
   minimumStock: string;
@@ -30,6 +31,8 @@ type PartForm = {
   position: string;
   isBGrade: boolean;
 };
+
+type PartSearchField = "all" | "category" | "designation" | "itemNumber" | "position";
 
 type CategoryManagerForm = {
   id: string | null;
@@ -74,6 +77,7 @@ const EMPTY_PART_FORM: PartForm = {
   id: null,
   itemNumber: "",
   designation: "",
+  memo: "",
   unitOfQuantity: "EA",
   currentStock: "0",
   minimumStock: "0",
@@ -112,6 +116,30 @@ function formatSplitStock(part: Part) {
 function formatTransactionSplitQty(tx: StockTransaction) {
   const qty = Number(tx.qty || 0);
   return tx.is_b_grade ? `0 (B급 ${qty})` : `${qty} (B급 0)`;
+}
+
+function matchesPartSearch(part: Part, keyword: string, field: PartSearchField) {
+  if (!keyword) return false;
+
+  const normalized = keyword.toLowerCase();
+  const checks =
+    field === "all"
+      ? [
+          part.item_number,
+          part.designation,
+          part.location || "",
+          part.position || "",
+          part.spare_parts_identifier || "",
+        ]
+      : field === "category"
+        ? [part.location || ""]
+        : field === "designation"
+          ? [part.designation, part.spare_parts_identifier || ""]
+          : field === "itemNumber"
+            ? [part.item_number]
+            : [part.position || ""];
+
+  return checks.some((value) => value.toLowerCase().includes(normalized));
 }
 
 function LocationPreview({
@@ -160,6 +188,7 @@ export default function ManagementPage() {
   const [txHistory, setTxHistory] = useState<StockTransaction[]>([]);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+  const [searchField, setSearchField] = useState<PartSearchField>("all");
   const [showLowOnly, setShowLowOnly] = useState(false);
   const [partsSort, setPartsSort] = useState<"item" | "stockAsc" | "stockDesc" | "designation">("item");
   const [loading, setLoading] = useState(true);
@@ -168,6 +197,7 @@ export default function ManagementPage() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("search");
   const [stockModalOpen, setStockModalOpen] = useState(false);
   const [stockModalSearch, setStockModalSearch] = useState("");
+  const [stockModalSearchField, setStockModalSearchField] = useState<PartSearchField>("all");
   const [stockModalSort, setStockModalSort] = useState<"category" | "item" | "designation" | "stockDesc" | "stockAsc">("category");
 
   const [txForm, setTxForm] = useState<TxForm>(createEmptyTxForm);
@@ -184,6 +214,7 @@ export default function ManagementPage() {
   const [deletingLocationId, setDeletingLocationId] = useState<string | null>(null);
   const [categoryOptionsOpen, setCategoryOptionsOpen] = useState(false);
   const [locationOptionsOpen, setLocationOptionsOpen] = useState(false);
+  const [stockConfirmPart, setStockConfirmPart] = useState<Part | null>(null);
   const [txEditForm, setTxEditForm] = useState<TxEditForm | null>(null);
   const [txHistorySearch, setTxHistorySearch] = useState("");
 
@@ -920,12 +951,7 @@ export default function ManagementPage() {
       return [];
     }
     const filtered = parts.filter((part) => {
-      const hit =
-        part.item_number.toLowerCase().includes(keyword) ||
-        part.designation.toLowerCase().includes(keyword) ||
-        (part.location || "").toLowerCase().includes(keyword) ||
-        (part.position || "").toLowerCase().includes(keyword) ||
-        (part.is_b_grade ? "b급" : "").includes(keyword);
+      const hit = matchesPartSearch(part, keyword, searchField) || (searchField === "all" && (part.is_b_grade ? "b급" : "").includes(keyword));
       return hit && (!showLowOnly || isPartLow(part, minimumStockValue));
     });
 
@@ -936,7 +962,7 @@ export default function ManagementPage() {
       return a.item_number.localeCompare(b.item_number);
     });
     return filtered;
-  }, [minimumStockValue, parts, partsSort, search, showLowOnly]);
+  }, [minimumStockValue, parts, partsSort, search, searchField, showLowOnly]);
 
   const inboundParts = useMemo(() => {
     return [...parts]
@@ -948,11 +974,7 @@ export default function ManagementPage() {
     const keyword = stockModalSearch.trim().toLowerCase();
     const filtered = inboundParts.filter((part) => {
       if (!keyword) return true;
-      return (
-        part.item_number.toLowerCase().includes(keyword) ||
-        part.designation.toLowerCase().includes(keyword) ||
-        (part.location || "").toLowerCase().includes(keyword)
-      );
+      return matchesPartSearch(part, keyword, stockModalSearchField);
     });
 
     filtered.sort((a, b) => {
@@ -964,7 +986,7 @@ export default function ManagementPage() {
     });
 
     return filtered;
-  }, [inboundParts, stockModalSearch, stockModalSort]);
+  }, [inboundParts, stockModalSearch, stockModalSearchField, stockModalSort]);
 
   const lowCount = parts.filter((part) => isPartLow(part, minimumStockValue)).length;
   const inboundRegisteredCount = inboundParts.length;
@@ -1085,11 +1107,13 @@ export default function ManagementPage() {
   }
 
   function editPart(part: Part) {
+    setStockModalOpen(false);
     setActiveTab("admin");
     setPartForm({
       id: part.id,
       itemNumber: part.item_number,
       designation: part.designation,
+      memo: part.spare_parts_identifier || "",
       unitOfQuantity: normalizeUnit(part.unit_of_quantity) || "EA",
       currentStock: String(part.current_stock ?? 0),
       minimumStock: String(part.minimum_stock ?? 0),
@@ -1102,6 +1126,21 @@ export default function ManagementPage() {
 
   function resetPartForm() {
     setPartForm(EMPTY_PART_FORM);
+  }
+
+  function openStockQuickAction(part: Part) {
+    setStockConfirmPart(part);
+    setError(null);
+  }
+
+  function confirmStockQuickAction() {
+    if (!stockConfirmPart) return;
+    setTxForm((prev) => ({
+      ...prev,
+      itemNumber: stockConfirmPart.item_number,
+    }));
+    setStockConfirmPart(null);
+    setActiveTab("stock");
   }
 
   function openCategoryManager() {
@@ -1271,6 +1310,7 @@ export default function ManagementPage() {
       designation: partForm.designation.trim(),
       quantity: Number(partForm.currentStock || 0),
       unit_of_quantity: normalizeUnit(partForm.unitOfQuantity),
+      spare_parts_identifier: partForm.memo.trim() || null,
       current_stock: Number(partForm.currentStock || 0),
       minimum_stock: Number(globalMinimumStock || partForm.minimumStock || 0),
       location: normalizedCategory,
@@ -1516,10 +1556,17 @@ export default function ManagementPage() {
         <>
           <section className="toolbarPanel panel" aria-label="검색 및 필터">
             <div className="toolbarSearch">
+              <select className="select" value={searchField} onChange={(e) => setSearchField(e.target.value as PartSearchField)}>
+                <option value="all">전체</option>
+                <option value="category">구분</option>
+                <option value="designation">품목명</option>
+                <option value="itemNumber">파트번호</option>
+                <option value="position">위치</option>
+              </select>
               <div className="inlineFieldRow">
                 <input
                   className="input"
-                  placeholder="품목번호 / 품명 / 구분 / 위치 검색"
+                  placeholder="검색 조건에 맞는 값을 입력하세요"
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
                   onKeyDown={(e) => {
@@ -1577,12 +1624,15 @@ export default function ManagementPage() {
                   const locationInfo = locationsByCode.get((part.position || "").toUpperCase());
                   return (
                     <article key={part.id} className="dataCard">
-                      <div className="dataCardHead">
-                        <strong>{part.location || "구분 없음"}</strong>
-                        <span className={low ? "low" : undefined}>재고 {part.current_stock}</span>
-                      </div>
-                      <div>{part.item_number}</div>
-                      <div>{part.designation}</div>
+                    <div className="dataCardHead">
+                      <strong>{part.location || "구분 없음"}</strong>
+                      <span className={low ? "low" : undefined}>재고 {part.current_stock}</span>
+                    </div>
+                    <div>{part.item_number}</div>
+                      <button className="textTrigger" type="button" onClick={() => openStockQuickAction(part)}>
+                        {part.designation}
+                      </button>
+                      {part.spare_parts_identifier ? <div className="meta partMemo">{part.spare_parts_identifier}</div> : null}
                       <div className="badgeRow">
                         <span className="softBadge">{formatSplitStock(part)}</span>
                         <span className="softBadge">{part.unit_of_quantity || "-"}</span>
@@ -1888,9 +1938,16 @@ export default function ManagementPage() {
               </div>
             </div>
             <div className="modalToolbar">
+              <select className="select" value={stockModalSearchField} onChange={(e) => setStockModalSearchField(e.target.value as PartSearchField)}>
+                <option value="all">전체</option>
+                <option value="category">구분</option>
+                <option value="designation">품목명</option>
+                <option value="itemNumber">파트번호</option>
+                <option value="position">위치</option>
+              </select>
               <input
                 className="input"
-                placeholder="구분 / 파트번호 / 품명 검색"
+                placeholder="선택한 항목으로 검색"
                 value={stockModalSearch}
                 onChange={(e) => setStockModalSearch(e.target.value)}
               />
@@ -1914,6 +1971,7 @@ export default function ManagementPage() {
                     </div>
                     <div>{part.item_number}</div>
                     <div>{part.designation}</div>
+                    {part.spare_parts_identifier ? <div className="meta partMemo">{part.spare_parts_identifier}</div> : null}
                     <div className="badgeRow">
                       <span className="softBadge">{formatSplitStock(part)}</span>
                       <span className="softBadge">{part.unit_of_quantity || "-"}</span>
@@ -1963,7 +2021,10 @@ export default function ManagementPage() {
                       <tr key={part.id}>
                         <td>{part.location || "-"}</td>
                         <td>{part.item_number}</td>
-                        <td>{part.designation}</td>
+                        <td>
+                          <div>{part.designation}</div>
+                          {part.spare_parts_identifier ? <div className="meta partMemo">{part.spare_parts_identifier}</div> : null}
+                        </td>
                         <td>{formatSplitStock(part)}</td>
                         <td>{part.unit_of_quantity || "-"}</td>
                         <td><LocationPreview position={part.position} description={locationInfo?.description} imageUrl={locationInfo?.image_url} /></td>
@@ -2037,6 +2098,11 @@ export default function ManagementPage() {
                   <div className="formRow">
                     <label className="label">품명</label>
                     <input className="input" autoComplete="off" value={partForm.designation} onChange={(e) => setPartForm((v) => ({ ...v, designation: e.target.value }))} placeholder="designation" />
+                  </div>
+
+                  <div className="formRow">
+                    <label className="label">메모</label>
+                    <input className="input" autoComplete="off" value={partForm.memo} onChange={(e) => setPartForm((v) => ({ ...v, memo: e.target.value }))} placeholder="비고 / 설명 메모" />
                   </div>
 
                   <div className="formRow">
@@ -2342,6 +2408,36 @@ export default function ManagementPage() {
                 </div>
               ))}
               {locations.length === 0 ? <div className="panelNotice">등록된 위치가 없습니다.</div> : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {stockConfirmPart ? (
+        <div className="scannerOverlay" role="dialog" aria-modal="true" aria-label="입출고 진행 확인">
+          <div className="scannerModal">
+            <div className="adminHeaderRow" style={{ marginBottom: 8 }}>
+              <h2 style={{ margin: 0 }}>입출고 진행</h2>
+              <button className="btn secondary small" type="button" onClick={() => setStockConfirmPart(null)}>
+                닫기
+              </button>
+            </div>
+            <div className="scannerGuide">
+              입출고를 진행하시겠습니까?
+            </div>
+            <div className="scannerConfirmBox">
+              <div><strong>{stockConfirmPart.designation}</strong></div>
+              <div className="meta" style={{ marginTop: 4 }}>
+                {stockConfirmPart.item_number} / 구분 {stockConfirmPart.location || "-"} / 위치 {stockConfirmPart.position || "-"}
+              </div>
+            </div>
+            <div className="actions" style={{ marginTop: 12 }}>
+              <button className="btn" type="button" onClick={confirmStockQuickAction}>
+                진행
+              </button>
+              <button className="btn secondary" type="button" onClick={() => setStockConfirmPart(null)}>
+                취소
+              </button>
             </div>
           </div>
         </div>

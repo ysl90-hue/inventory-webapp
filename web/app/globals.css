@@ -66,7 +66,7 @@ a {
 
 .toolbarSearch {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: 150px minmax(0, 1fr) auto;
   gap: 10px;
 }
 
@@ -79,9 +79,23 @@ a {
 
 .modalToolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 180px;
+  grid-template-columns: 150px minmax(0, 1fr) 180px;
   gap: 10px;
   margin-bottom: 12px;
+}
+
+.textTrigger {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.partMemo {
+  margin-top: 4px;
 }
 
 .filterChips {
