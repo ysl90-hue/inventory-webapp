@@ -52,6 +52,7 @@ type TxEditForm = {
   designation: string;
   txType: "IN" | "OUT";
   qty: string;
+  txDate: string;
   memo: string;
   isBGrade: boolean;
 };
@@ -965,9 +966,7 @@ export default function ManagementPage() {
   }, [minimumStockValue, parts, partsSort, search, searchField, showLowOnly]);
 
   const inboundParts = useMemo(() => {
-    return [...parts]
-      .filter((part) => Number(part.current_stock) > 0)
-      .sort((a, b) => a.item_number.localeCompare(b.item_number));
+    return [...parts].sort((a, b) => a.item_number.localeCompare(b.item_number));
   }, [parts]);
 
   const filteredInboundParts = useMemo(() => {
@@ -1399,6 +1398,7 @@ export default function ManagementPage() {
       designation: tx.parts?.designation || "-",
       txType: tx.tx_type,
       qty: String(tx.qty),
+      txDate: formatDateInput(tx.created_at),
       memo: tx.memo || "",
       isBGrade: Boolean(tx.is_b_grade),
     });
@@ -1411,6 +1411,11 @@ export default function ManagementPage() {
     setSavingTxEdit(true);
 
     try {
+      const createdAt = txEditForm.txDate ? new Date(`${txEditForm.txDate}T00:00:00`) : null;
+      if (!createdAt || Number.isNaN(createdAt.getTime())) {
+        setError("수정할 날짜를 정확히 입력하세요.");
+        return;
+      }
       const res = await fetch(`/api/transactions/${txEditForm.id}`, {
         method: "PATCH",
         headers: {
@@ -1420,6 +1425,7 @@ export default function ManagementPage() {
         body: JSON.stringify({
           txType: txEditForm.txType,
           qty: Number(txEditForm.qty),
+          createdAt: createdAt.toISOString(),
           memo: txEditForm.memo.trim() || null,
           isBGrade: txEditForm.isBGrade,
         }),
@@ -2481,6 +2487,15 @@ export default function ManagementPage() {
                   step="0.01"
                   value={txEditForm.qty}
                   onChange={(e) => setTxEditForm((prev) => (prev ? { ...prev, qty: e.target.value } : prev))}
+                />
+              </div>
+              <div className="formRow">
+                <label className="label">날짜</label>
+                <input
+                  className="input"
+                  type="date"
+                  value={txEditForm.txDate}
+                  onChange={(e) => setTxEditForm((prev) => (prev ? { ...prev, txDate: e.target.value } : prev))}
                 />
               </div>
               <div className="formRow">

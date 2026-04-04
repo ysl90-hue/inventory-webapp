@@ -8,6 +8,7 @@ export const runtime = "nodejs";
 type TransactionPayload = {
   txType?: "IN" | "OUT";
   qty?: number;
+  createdAt?: string;
   memo?: string | null;
   isBGrade?: boolean;
 };
@@ -50,11 +51,15 @@ export async function PATCH(
     const body = (await req.json()) as TransactionPayload;
     const txType = body.txType;
     const qty = Number(body.qty);
+    const createdAt = body.createdAt ? new Date(body.createdAt) : null;
     const memo = body.memo?.trim() || null;
     const isBGrade = parseBooleanFlag(body.isBGrade);
 
     if ((txType !== "IN" && txType !== "OUT") || !Number.isFinite(qty) || qty <= 0) {
       return NextResponse.json({ error: "수정할 구분과 수량을 정확히 입력하세요." }, { status: 400 });
+    }
+    if (!createdAt || Number.isNaN(createdAt.getTime())) {
+      return NextResponse.json({ error: "수정할 날짜를 정확히 입력하세요." }, { status: 400 });
     }
 
     const currentTx = await fetchTransaction(me.token, id);
@@ -95,6 +100,7 @@ export async function PATCH(
       body: JSON.stringify({
         tx_type: txType,
         qty,
+        created_at: createdAt.toISOString(),
         memo,
         is_b_grade: isBGrade,
       }),
