@@ -57,6 +57,66 @@ type TxEditForm = {
   isBGrade: boolean;
 };
 
+const HELP_SECTIONS = [
+  {
+    title: "시작하기",
+    items: [
+      "처음 사용하는 경우 관리자 계정으로 로그인한 뒤 구분과 위치를 먼저 등록합니다.",
+      "그 다음 품종등록에서 품목번호, 품명, 메모, 단위, 구분, 위치를 입력해 품목을 등록합니다.",
+      "품종등록이 되지 않은 품목은 입출고 처리되지 않으며 '품종등록을 진행해 주세요.' 문구가 표시됩니다.",
+    ],
+  },
+  {
+    title: "메뉴 안내",
+    items: [
+      "검색: 등록된 품목을 조건별로 찾고 재고, 메모, 위치를 확인합니다.",
+      "입출고 처리: 품목번호 입력 또는 바코드 스캔으로 입고/출고를 등록합니다.",
+      "입고 등록 파트: 등록된 전체 품목을 팝업으로 확인하고 검색/정렬합니다.",
+      "품종등록: 품목 신규 등록, 수정, 구분 관리, 위치 관리를 진행합니다.",
+    ],
+  },
+  {
+    title: "검색 사용법",
+    items: [
+      "검색창 앞에서 전체, 구분, 품목명, 파트번호, 위치 중 하나를 선택해 검색할 수 있습니다.",
+      "검색창에서도 바코드 스캔이 가능하며 스캔값이 바로 검색어로 입력됩니다.",
+      "검색 결과에서 품명을 누르면 '입출고를 진행하시겠습니까?' 확인창이 뜨고, 확인하면 입출고 처리 화면으로 이동합니다.",
+    ],
+  },
+  {
+    title: "입출고 처리",
+    items: [
+      "품목번호, 입고/출고, 수량, 날짜, 메모, B급 여부를 입력해 저장합니다.",
+      "최근 이력은 관리자 계정에서 수정과 삭제가 가능하며, 수정 시 날짜도 변경할 수 있습니다.",
+      "출고 수량이 현재 재고보다 많으면 저장되지 않습니다.",
+    ],
+  },
+  {
+    title: "품종등록",
+    items: [
+      "품종등록에서는 품목번호, 품명, 메모, 현재 재고, 단위, 구분, 파트 위치, B급 여부를 관리합니다.",
+      "구분과 파트 위치는 목록 버튼으로 선택하거나 직접 입력할 수 있습니다.",
+      "파 위치는 코드와 설명이 함께 표시되며, 선택한 위치 설명은 입력창 아래에서 확인할 수 있습니다.",
+    ],
+  },
+  {
+    title: "관리자 기능",
+    items: [
+      "구분 관리 팝업에서 구분 추가, 수정, 삭제가 가능합니다.",
+      "위치 관리 팝업에서 위치코드, 설명, 사진 추가/수정/삭제가 가능합니다.",
+      "입고 등록 파트 팝업의 수정 버튼을 누르면 품종등록 화면으로 이동합니다.",
+    ],
+  },
+  {
+    title: "자주 확인할 점",
+    items: [
+      "변경사항이 보이지 않으면 브라우저 새로고침 또는 서버 재시작을 먼저 확인합니다.",
+      "바코드 스캔이 안 될 경우 브라우저 카메라 권한과 초점 거리를 확인합니다.",
+      "검색 결과가 없으면 검색 조건을 전체로 변경해 다시 확인합니다.",
+    ],
+  },
+] as const;
+
 function formatDateInput(value?: string | Date) {
   const date = value ? new Date(value) : new Date();
   const adjusted = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
@@ -216,6 +276,7 @@ export default function ManagementPage() {
   const [categoryOptionsOpen, setCategoryOptionsOpen] = useState(false);
   const [locationOptionsOpen, setLocationOptionsOpen] = useState(false);
   const [stockConfirmPart, setStockConfirmPart] = useState<Part | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [txEditForm, setTxEditForm] = useState<TxEditForm | null>(null);
   const [txHistorySearch, setTxHistorySearch] = useState("");
 
@@ -1519,6 +1580,9 @@ export default function ManagementPage() {
             {authDisplayName || session.user.email?.split("@")[0] || "Logged in"} {"·"} <strong>{isAdmin ? "ADMIN" : "USER"}</strong>
           </div>
           <div className="actions">
+            <button className="btn secondary small" type="button" onClick={() => setHelpOpen(true)}>
+              도움말
+            </button>
             <button className="btn secondary small" type="button" onClick={() => void loadData()}>
               새로고침
             </button>
@@ -1555,6 +1619,34 @@ export default function ManagementPage() {
       {successToast ? (
         <div className="toast success" role="status" aria-live="polite">
           {successToast}
+        </div>
+      ) : null}
+
+      {helpOpen ? (
+        <div className="scannerOverlay" role="dialog" aria-modal="true" aria-label="프로그램 도움말">
+          <div className="scannerModal helpModal">
+            <div className="adminHeaderRow" style={{ marginBottom: 8 }}>
+              <h2 style={{ margin: 0 }}>프로그램 도움말</h2>
+              <button className="btn secondary small" type="button" onClick={() => setHelpOpen(false)}>
+                닫기
+              </button>
+            </div>
+            <div className="helpIntro">
+              현재 웹앱 기준으로 자주 사용하는 기능을 빠르게 확인할 수 있는 안내입니다.
+            </div>
+            <div className="helpSections">
+              {HELP_SECTIONS.map((section) => (
+                <section key={section.title} className="helpSection">
+                  <h3>{section.title}</h3>
+                  <ul className="helpList">
+                    {section.items.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </section>
+              ))}
+            </div>
+          </div>
         </div>
       ) : null}
 

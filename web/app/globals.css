@@ -643,6 +643,46 @@ th {
   overflow: visible;
 }
 
+.helpModal {
+  width: min(880px, calc(100vw - 32px));
+  max-height: 88vh;
+  overflow: auto;
+}
+
+.helpIntro {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #d9efe7;
+  background: rgba(217, 239, 231, 0.35);
+  color: #0f5f58;
+  font-size: 0.9rem;
+}
+
+.helpSections {
+  display: grid;
+  gap: 12px;
+}
+
+.helpSection {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  background: rgba(255, 253, 250, 0.85);
+}
+
+.helpSection h3 {
+  margin: 0 0 8px;
+  font-size: 0.98rem;
+}
+
+.helpList {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+}
+
 .manageModal {
   width: min(760px, calc(100vw - 32px));
   max-height: 88vh;
