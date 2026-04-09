@@ -135,11 +135,12 @@ to authenticated
 using (bucket_id = 'part-location-images' and public.is_admin());
 
 drop policy if exists "stock tx update admin only" on public.stock_transactions;
-create policy "stock tx update admin only"
+drop policy if exists "stock tx update authenticated" on public.stock_transactions;
+create policy "stock tx update authenticated"
 on public.stock_transactions for update
 to authenticated
-using (public.is_admin())
-with check (public.is_admin());
+using (true)
+with check (true);
 
 drop policy if exists "stock tx delete admin only" on public.stock_transactions;
 create policy "stock tx delete admin only"
