@@ -6,7 +6,7 @@ create extension if not exists pgcrypto;
 create table if not exists public.parts (
   id uuid primary key default gen_random_uuid(),
   position text,
-  item_number text not null unique,
+  item_number text not null,
   designation text not null,
   quantity numeric(12, 2) not null default 0,
   unit_of_quantity text,
@@ -21,9 +21,13 @@ create table if not exists public.parts (
 
 alter table public.parts add column if not exists is_b_grade boolean not null default false;
 
+alter table public.parts drop constraint if exists parts_item_number_key;
+
 create index if not exists idx_parts_item_number on public.parts(item_number);
 create index if not exists idx_parts_designation on public.parts(designation);
 create index if not exists idx_parts_low_stock on public.parts(current_stock, minimum_stock);
+create unique index if not exists idx_parts_item_location_position_unique
+  on public.parts (item_number, coalesce(location, ''), coalesce(position, ''));
 
 create table if not exists public.stock_transactions (
   id uuid primary key default gen_random_uuid(),
@@ -86,10 +90,10 @@ execute function public.set_updated_at();
 
 drop function if exists public.apply_stock_transaction(text, text, numeric, text);
 drop function if exists public.apply_stock_transaction(text, text, numeric, text, boolean);
+drop function if exists public.apply_stock_transaction_by_part(uuid, text, numeric, text, timestamptz, boolean);
 
--- Atomic stock update + transaction log
-create or replace function public.apply_stock_transaction(
-  p_item_number text,
+create or replace function public.apply_stock_transaction_by_part(
+  p_part_id uuid,
   p_tx_type text,
   p_qty numeric,
   p_memo text default null,
@@ -115,11 +119,11 @@ begin
 
   select * into v_part
   from public.parts
-  where item_number = p_item_number
+  where id = p_part_id
   for update;
 
   if not found then
-    raise exception 'Part not found: %', p_item_number;
+    raise exception 'Part not found: %', p_part_id;
   end if;
 
   if p_tx_type = 'IN' then
@@ -128,7 +132,7 @@ begin
     v_new_stock := v_part.current_stock - p_qty;
     if v_new_stock < 0 then
       raise exception 'Insufficient stock for % (current %, requested %)',
-        p_item_number, v_part.current_stock, p_qty;
+        v_part.item_number, v_part.current_stock, p_qty;
     end if;
   else
     -- ADJUST means set current_stock directly to p_qty
@@ -187,7 +191,7 @@ on public.stock_transactions for insert
 to anon, authenticated
 with check (true);
 
-grant execute on function public.apply_stock_transaction(text, text, numeric, text, timestamptz, boolean)
+grant execute on function public.apply_stock_transaction_by_part(uuid, text, numeric, text, timestamptz, boolean)
 to anon, authenticated;
 
 drop policy if exists "part categories read" on public.part_categories;

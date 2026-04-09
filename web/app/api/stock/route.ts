@@ -11,6 +11,7 @@ export async function POST(req: NextRequest) {
       authHeader && authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : null;
 
     const body = (await req.json()) as {
+      partId?: string;
       itemNumber?: string;
       txType?: "IN" | "OUT";
       qty?: number;
@@ -19,21 +20,21 @@ export async function POST(req: NextRequest) {
       isBGrade?: boolean;
     };
 
-    const itemNumber = body.itemNumber?.trim();
+    const partId = body.partId?.trim();
     const txType = body.txType;
     const qty = Number(body.qty);
     const memo = body.memo?.trim() || null;
     const createdAt = body.createdAt?.trim() || null;
     const isBGrade = parseBooleanFlag(body.isBGrade);
 
-    if (!itemNumber || (txType !== "IN" && txType !== "OUT") || !Number.isFinite(qty) || qty <= 0) {
+    if (!partId || (txType !== "IN" && txType !== "OUT") || !Number.isFinite(qty) || qty <= 0) {
       return NextResponse.json({ error: "Invalid request" }, { status: 400 });
     }
 
     const rpcInit = {
       method: "POST",
       body: JSON.stringify({
-        p_item_number: itemNumber,
+        p_part_id: partId,
         p_tx_type: txType,
         p_qty: qty,
         p_memo: memo,
@@ -42,8 +43,8 @@ export async function POST(req: NextRequest) {
       }),
     };
     const res = bearerToken
-      ? await supabaseRestAsUser("/rpc/apply_stock_transaction", bearerToken, rpcInit)
-      : await supabaseRest("/rpc/apply_stock_transaction", rpcInit);
+      ? await supabaseRestAsUser("/rpc/apply_stock_transaction_by_part", bearerToken, rpcInit)
+      : await supabaseRest("/rpc/apply_stock_transaction_by_part", rpcInit);
     const text = await res.text();
     if (!res.ok) {
       return NextResponse.json({ error: stockTransactionErrorMessage(text) }, { status: res.status });

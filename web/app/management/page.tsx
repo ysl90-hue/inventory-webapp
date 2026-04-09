@@ -11,6 +11,7 @@ import type { Part, PartCategory, PartLocation, StockTransaction } from "@/lib/t
 type ActiveTab = "search" | "stock" | "admin";
 
 type TxForm = {
+  partId: string | null;
   itemNumber: string;
   txType: "IN" | "OUT";
   qty: string;
@@ -70,7 +71,7 @@ const HELP_SECTIONS = [
     title: "메뉴 안내",
     items: [
       "검색: 등록된 품목을 조건별로 찾고 재고, 메모, 위치를 확인합니다.",
-      "입출고 처리: 품목번호 입력 또는 바코드 스캔으로 입고/출고를 등록합니다.",
+      "입출고 처리: 선택한 품목 기준으로 입고/출고를 등록합니다.",
       "입고 등록 파트: 등록된 전체 품목을 팝업으로 확인하고 검색/정렬합니다.",
       "품종등록: 품목 신규 등록, 수정, 구분 관리, 위치 관리를 진행합니다.",
     ],
@@ -86,7 +87,7 @@ const HELP_SECTIONS = [
   {
     title: "입출고 처리",
     items: [
-      "품목번호, 입고/출고, 수량, 날짜, 메모, B급 여부를 입력해 저장합니다.",
+      "선택한 품목 기준으로 입고/출고, 수량, 날짜, 메모, B급 여부를 입력해 저장합니다.",
       "최근 이력은 관리자 계정에서 수정과 삭제가 가능하며, 수정 시 날짜도 변경할 수 있습니다.",
       "출고 수량이 현재 재고보다 많으면 저장되지 않습니다.",
     ],
@@ -125,6 +126,7 @@ function formatDateInput(value?: string | Date) {
 
 function createEmptyTxForm(): TxForm {
   return {
+    partId: null,
     itemNumber: "",
     txType: "IN",
     qty: "",
@@ -1050,7 +1052,14 @@ export default function ManagementPage() {
 
   const lowCount = parts.filter((part) => isPartLow(part, minimumStockValue)).length;
   const inboundRegisteredCount = inboundParts.length;
-  const selectedPart = parts.find((part) => part.item_number === txForm.itemNumber.trim().toUpperCase()) || null;
+  const matchedTxParts = useMemo(() => {
+    const normalized = txForm.itemNumber.trim().toUpperCase();
+    if (!normalized) return [];
+    return parts.filter((part) => part.item_number === normalized);
+  }, [parts, txForm.itemNumber]);
+  const selectedPart =
+    (txForm.partId ? parts.find((part) => part.id === txForm.partId) : null) ||
+    (matchedTxParts.length === 1 ? matchedTxParts[0] : null);
   const filteredTxHistory = useMemo(() => {
     const keyword = txHistorySearch.trim().toLowerCase();
     if (!keyword) return txHistory;
@@ -1100,10 +1109,9 @@ export default function ManagementPage() {
     setError(null);
 
     const qty = Number(txForm.qty);
-    const normalizedItemNumber = txForm.itemNumber.trim().toUpperCase();
     const createdAt = txForm.txDate ? new Date(`${txForm.txDate}T00:00:00`) : null;
-    if (!normalizedItemNumber || !Number.isFinite(qty) || qty <= 0) {
-      setError("품목번호와 수량을 정확히 입력하세요.");
+    if (!selectedPart || !Number.isFinite(qty) || qty <= 0) {
+      setError("입출고할 품목을 정확히 선택하고 수량을 입력하세요.");
       return;
     }
     if (!createdAt || Number.isNaN(createdAt.getTime())) {
@@ -1118,7 +1126,7 @@ export default function ManagementPage() {
         ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
       },
       body: JSON.stringify({
-        itemNumber: normalizedItemNumber,
+        partId: selectedPart.id,
         txType: txForm.txType,
         qty,
         memo: txForm.memo.trim() || null,
@@ -1151,7 +1159,7 @@ export default function ManagementPage() {
       setSearchInput(scannerPendingValue);
       setSearch(scannerPendingValue.trim());
     } else if (scannerTarget === "tx") {
-      setTxForm((v) => ({ ...v, itemNumber: scannerPendingValue }));
+      setTxForm((v) => ({ ...v, partId: null, itemNumber: scannerPendingValue }));
     } else {
       setPartForm((v) => ({ ...v, itemNumber: scannerPendingValue }));
     }
@@ -1197,6 +1205,7 @@ export default function ManagementPage() {
     if (!stockConfirmPart) return;
     setTxForm((prev) => ({
       ...prev,
+      partId: stockConfirmPart.id,
       itemNumber: stockConfirmPart.item_number,
     }));
     setStockConfirmPart(null);
@@ -1833,13 +1842,13 @@ export default function ManagementPage() {
             <h2>입출고 처리</h2>
             <form onSubmit={submitTx}>
               <div className="formRow">
-                <label className="label">품목번호</label>
+                <label className="label">품목 선택</label>
                 <input
                   className="input"
                   autoComplete="off"
                   value={txForm.itemNumber}
-                  onChange={(e) => setTxForm((v) => ({ ...v, itemNumber: e.target.value.toUpperCase() }))}
-                  placeholder="등록된 품목번호 입력"
+                  onChange={(e) => setTxForm((v) => ({ ...v, partId: null, itemNumber: e.target.value.toUpperCase() }))}
+                  placeholder="검색 결과에서 선택하거나 품목번호를 입력"
                 />
                 <div className="actions" style={{ marginTop: 8 }}>
                   <button className="btn secondary small" type="button" onClick={() => openScanner("tx")}>
@@ -1847,8 +1856,28 @@ export default function ManagementPage() {
                   </button>
                 </div>
                 <div className="meta">
-                  {selectedPart ? `${selectedPart.designation} / 구분 ${selectedPart.location || "-"} / 현재재고 ${selectedPart.current_stock}` : "미등록 품목은 저장되지 않습니다."}
+                  {selectedPart
+                    ? `${selectedPart.designation} / 구분 ${selectedPart.location || "-"} / 위치 ${selectedPart.position || "-"} / 현재재고 ${selectedPart.current_stock}`
+                    : matchedTxParts.length > 1
+                      ? "같은 품목번호가 여러 개 있습니다. 아래 목록에서 정확한 품목을 선택하세요."
+                      : "검색 결과에서 품목을 선택하거나 고유한 품목번호를 입력하세요."}
                 </div>
+                {matchedTxParts.length > 1 ? (
+                  <div className="candidateList">
+                    {matchedTxParts.map((part) => (
+                      <button
+                        key={part.id}
+                        className={`candidateItem${txForm.partId === part.id ? " active" : ""}`}
+                        type="button"
+                        onClick={() => setTxForm((v) => ({ ...v, partId: part.id, itemNumber: part.item_number }))}
+                      >
+                        <strong>{part.item_number}</strong>
+                        <span>{part.designation}</span>
+                        <span className="meta">구분 {part.location || "-"} / 위치 {part.position || "-"}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
               </div>
 
               <div className="formRow">

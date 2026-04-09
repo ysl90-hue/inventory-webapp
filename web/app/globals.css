@@ -98,6 +98,28 @@ a {
   margin-top: 4px;
 }
 
+.candidateList {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.candidateItem {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(255, 253, 250, 0.92);
+  text-align: left;
+  cursor: pointer;
+}
+
+.candidateItem.active {
+  border-color: #7ab7aa;
+  background: #e7f3ef;
+}
+
 .filterChips {
   display: flex;
   gap: 8px;
