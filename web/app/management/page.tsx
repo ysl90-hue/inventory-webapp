@@ -1955,14 +1955,16 @@ export default function ManagementPage() {
                         <div>{tx.actor_name || "-"}</div>
                       </div>
                     </div>
-                    {isAdmin && tx.tx_type !== "ADJUST" ? (
+                    {tx.tx_type !== "ADJUST" ? (
                       <div className="actions" style={{ marginTop: 10 }}>
                         <button className="btn secondary small" type="button" onClick={() => startEditTransaction(tx)}>
                           수정
                         </button>
-                        <button className="btn danger small" type="button" onClick={() => void deleteTransaction(tx)}>
-                          삭제
-                        </button>
+                        {isAdmin ? (
+                          <button className="btn danger small" type="button" onClick={() => void deleteTransaction(tx)}>
+                            삭제
+                          </button>
+                        ) : null}
                       </div>
                     ) : null}
                   </article>
@@ -1981,7 +1983,7 @@ export default function ManagementPage() {
                       <th>메모</th>
                       <th>날짜</th>
                       <th>사용자</th>
-                      {isAdmin ? <th>관리</th> : null}
+                      <th>관리</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1997,27 +1999,27 @@ export default function ManagementPage() {
                         <td>{tx.memo || "-"}</td>
                         <td>{new Date(tx.created_at).toLocaleDateString("ko-KR")}</td>
                         <td>{tx.actor_name || "-"}</td>
-                        {isAdmin ? (
-                          <td>
-                            {tx.tx_type === "ADJUST" ? (
-                              <span className="meta">보정 이력</span>
-                            ) : (
-                              <div className="actions">
-                                <button className="btn secondary small" type="button" onClick={() => startEditTransaction(tx)}>
-                                  수정
-                                </button>
+                        <td>
+                          {tx.tx_type === "ADJUST" ? (
+                            <span className="meta">보정 이력</span>
+                          ) : (
+                            <div className="actions">
+                              <button className="btn secondary small" type="button" onClick={() => startEditTransaction(tx)}>
+                                수정
+                              </button>
+                              {isAdmin ? (
                                 <button className="btn danger small" type="button" onClick={() => void deleteTransaction(tx)}>
                                   삭제
                                 </button>
-                              </div>
-                            )}
-                          </td>
-                        ) : null}
+                              ) : null}
+                            </div>
+                          )}
+                        </td>
                       </tr>
                     ))}
                     {!loading && filteredTxHistory.length === 0 ? (
                       <tr>
-                        <td colSpan={isAdmin ? 9 : 8}>조건에 맞는 최근 이력이 없습니다.</td>
+                        <td colSpan={9}>조건에 맞는 최근 이력이 없습니다.</td>
                       </tr>
                     ) : null}
                   </tbody>

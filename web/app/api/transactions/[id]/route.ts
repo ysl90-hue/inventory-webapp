@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/server-auth";
+import { getAuthenticatedUserWithRole, requireAdmin } from "@/lib/server-auth";
 import { supabaseRestAsUser } from "@/lib/supabase/rest";
 import { parseBooleanFlag, stockTransactionErrorMessage, txTypeToStockDelta } from "@/lib/inventory";
 
@@ -46,7 +46,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const me = await requireAdmin(req);
+    const me = await getAuthenticatedUserWithRole(req);
     const { id } = await params;
     const body = (await req.json()) as TransactionPayload;
     const txType = body.txType;
