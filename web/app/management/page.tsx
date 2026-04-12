@@ -114,7 +114,8 @@ const HELP_SECTIONS = [
       "입고/사용처리는 선택한 품목 기준으로 진행합니다.",
       "검색 결과에서 품명을 눌러 넘어오거나, 품목번호를 입력해 후보가 하나로 정해지면 해당 품목으로 처리할 수 있습니다.",
       "같은 품목번호가 여러 개 있으면 후보 목록이 표시되므로, 구분과 위치를 보고 정확한 품목을 선택해야 합니다.",
-      "입고/사용 구분, 수량, 날짜, 메모, B급 사용 여부를 입력한 뒤 저장합니다.",
+      "입고/사용 구분, 수량, 날짜, 메모, B급 여부를 입력한 뒤 저장합니다.",
+      "입고일 때 수량 옆의 B급을 체크하면 해당 수량이 B급 재고로 바로 입고됩니다.",
       "일반 사용 처리 중 필요한 경우 'B급으로 분류하시겠습니까?' 팝업에서 승인해 같은 수량을 B급 입고로 자동 전환할 수 있습니다.",
       "사용 수량이 현재 재고보다 많으면 저장되지 않습니다.",
     ],
@@ -123,7 +124,7 @@ const HELP_SECTIONS = [
     title: "최근 이력",
     items: [
       "최근 이력에서는 입고/사용 내역의 구분, 품목번호, 품명, 메모, 날짜, 사용자명을 확인할 수 있습니다.",
-      "최근 이력 수정에서는 수량, 메모, B급 사용 여부뿐 아니라 날짜도 변경할 수 있습니다.",
+      "최근 이력 수정에서는 수량, 메모, B급 여부뿐 아니라 날짜도 변경할 수 있습니다.",
       "수정은 로그인한 사용자도 가능하지만, 삭제는 관리자만 가능합니다.",
       "보정 이력(ADJUST)은 수정하거나 삭제할 수 없습니다.",
     ],
@@ -1989,7 +1990,7 @@ export default function ManagementPage() {
                   />
                   <label className="checkRow inlineCheck">
                     <input type="checkbox" checked={txForm.isBGrade} onChange={(e) => setTxForm((v) => ({ ...v, isBGrade: e.target.checked }))} />
-                    B급 사용
+                    B급
                   </label>
                 </div>
               </div>
@@ -2753,7 +2754,7 @@ export default function ManagementPage() {
                   checked={txEditForm.isBGrade}
                   onChange={(e) => setTxEditForm((prev) => (prev ? { ...prev, isBGrade: e.target.checked } : prev))}
                 />
-                B급 사용
+                B급
               </label>
               <div className="actions">
                 <button className="btn" type="submit" disabled={savingTxEdit}>
