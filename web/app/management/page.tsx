@@ -58,6 +58,15 @@ type TxEditForm = {
   isBGrade: boolean;
 };
 
+type BGradeUsagePrompt = {
+  partId: string;
+  designation: string;
+  itemNumber: string;
+  category: string | null;
+  position: string | null;
+  qty: number;
+};
+
 const HELP_SECTIONS = [
   {
     title: "시작하기",
@@ -105,7 +114,8 @@ const HELP_SECTIONS = [
       "입고/사용처리는 선택한 품목 기준으로 진행합니다.",
       "검색 결과에서 품명을 눌러 넘어오거나, 품목번호를 입력해 후보가 하나로 정해지면 해당 품목으로 처리할 수 있습니다.",
       "같은 품목번호가 여러 개 있으면 후보 목록이 표시되므로, 구분과 위치를 보고 정확한 품목을 선택해야 합니다.",
-      "입고/사용 구분, 수량, 날짜, 메모, B급 여부를 입력한 뒤 저장합니다.",
+      "입고/사용 구분, 수량, 날짜, 메모, B급 사용 여부를 입력한 뒤 저장합니다.",
+      "일반 사용 처리 중 필요한 경우 'B급으로 분류하시겠습니까?' 팝업에서 승인해 같은 수량을 B급 입고로 자동 전환할 수 있습니다.",
       "사용 수량이 현재 재고보다 많으면 저장되지 않습니다.",
     ],
   },
@@ -113,7 +123,7 @@ const HELP_SECTIONS = [
     title: "최근 이력",
     items: [
       "최근 이력에서는 입고/사용 내역의 구분, 품목번호, 품명, 메모, 날짜, 사용자명을 확인할 수 있습니다.",
-      "최근 이력 수정에서는 수량, 메모, B급 여부뿐 아니라 날짜도 변경할 수 있습니다.",
+      "최근 이력 수정에서는 수량, 메모, B급 사용 여부뿐 아니라 날짜도 변경할 수 있습니다.",
       "수정은 로그인한 사용자도 가능하지만, 삭제는 관리자만 가능합니다.",
       "보정 이력(ADJUST)은 수정하거나 삭제할 수 없습니다.",
     ],
@@ -306,6 +316,7 @@ export default function ManagementPage() {
   const [categoryOptionsOpen, setCategoryOptionsOpen] = useState(false);
   const [locationOptionsOpen, setLocationOptionsOpen] = useState(false);
   const [stockConfirmPart, setStockConfirmPart] = useState<Part | null>(null);
+  const [bGradeUsagePrompt, setBGradeUsagePrompt] = useState<BGradeUsagePrompt | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const [txEditForm, setTxEditForm] = useState<TxEditForm | null>(null);
   const [txHistorySearch, setTxHistorySearch] = useState("");
@@ -1143,7 +1154,38 @@ export default function ManagementPage() {
       return;
     }
     if (!createdAt || Number.isNaN(createdAt.getTime())) {
-      setError("날짜와 시간을 정확히 입력하세요.");
+      setError("날짜를 정확히 입력하세요.");
+      return;
+    }
+
+    if (txForm.txType === "OUT" && !txForm.isBGrade) {
+      setBGradeUsagePrompt({
+        partId: selectedPart.id,
+        designation: selectedPart.designation,
+        itemNumber: selectedPart.item_number,
+        category: selectedPart.location || null,
+        position: selectedPart.position || null,
+        qty,
+      });
+      return;
+    }
+
+    await performTxSubmit({ reclassifyToBGrade: false });
+  }
+
+  async function performTxSubmit({ reclassifyToBGrade }: { reclassifyToBGrade: boolean }) {
+    const qty = Number(txForm.qty);
+    const createdAt = txForm.txDate ? new Date(`${txForm.txDate}T00:00:00`) : null;
+    const targetPart =
+      (txForm.partId ? parts.find((part) => part.id === txForm.partId) : null) ||
+      (matchedTxParts.length === 1 ? matchedTxParts[0] : null);
+
+    if (!targetPart || !Number.isFinite(qty) || qty <= 0) {
+      setError("입고/사용처리할 품목을 정확히 선택하고 수량을 입력하세요.");
+      return;
+    }
+    if (!createdAt || Number.isNaN(createdAt.getTime())) {
+      setError("날짜를 정확히 입력하세요.");
       return;
     }
 
@@ -1154,12 +1196,13 @@ export default function ManagementPage() {
         ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
       },
       body: JSON.stringify({
-        partId: selectedPart.id,
+        partId: targetPart.id,
         txType: txForm.txType,
         qty,
         memo: txForm.memo.trim() || null,
         createdAt: createdAt.toISOString(),
         isBGrade: txForm.isBGrade,
+        reclassifyToBGrade,
       }),
     });
 
@@ -1169,9 +1212,24 @@ export default function ManagementPage() {
       return;
     }
 
+    setBGradeUsagePrompt(null);
     setTxForm(createEmptyTxForm());
-    showSuccessToast(`${txForm.txType === "IN" ? "입고" : "출고"} 처리 완료`);
+    showSuccessToast(
+      reclassifyToBGrade
+        ? "사용 처리 후 B급 입고까지 완료했습니다."
+        : `${txForm.txType === "IN" ? "입고" : "사용"} 처리 완료`,
+    );
     await loadData();
+  }
+
+  async function approveBGradeUsagePrompt() {
+    setBGradeUsagePrompt(null);
+    await performTxSubmit({ reclassifyToBGrade: true });
+  }
+
+  async function continueNormalUsage() {
+    setBGradeUsagePrompt(null);
+    await performTxSubmit({ reclassifyToBGrade: false });
   }
 
   function openScanner(target: "search" | "tx" | "part") {
@@ -1931,7 +1989,7 @@ export default function ManagementPage() {
                   />
                   <label className="checkRow inlineCheck">
                     <input type="checkbox" checked={txForm.isBGrade} onChange={(e) => setTxForm((v) => ({ ...v, isBGrade: e.target.checked }))} />
-                    B급
+                    B급 사용
                   </label>
                 </div>
               </div>
@@ -2605,6 +2663,42 @@ export default function ManagementPage() {
         </div>
       ) : null}
 
+      {bGradeUsagePrompt ? (
+        <div className="scannerOverlay" role="dialog" aria-modal="true" aria-label="B급 분류 확인">
+          <div className="scannerModal">
+            <div className="adminHeaderRow" style={{ marginBottom: 8 }}>
+              <h2 style={{ margin: 0 }}>B급 분류 확인</h2>
+              <button className="btn secondary small" type="button" onClick={() => setBGradeUsagePrompt(null)}>
+                닫기
+              </button>
+            </div>
+            <div className="scannerGuide">
+              B급으로 분류하시겠습니까?
+            </div>
+            <div className="scannerConfirmBox">
+              <div><strong>{bGradeUsagePrompt.designation}</strong></div>
+              <div className="meta" style={{ marginTop: 4 }}>
+                {bGradeUsagePrompt.itemNumber} / 구분 {bGradeUsagePrompt.category || "-"} / 위치 {bGradeUsagePrompt.position || "-"} / 수량 {bGradeUsagePrompt.qty}
+              </div>
+              <div className="meta" style={{ marginTop: 6 }}>
+                승인하면 일반 사용 처리 후 같은 수량이 B급 재고로 자동 입고됩니다.
+              </div>
+            </div>
+            <div className="actions" style={{ marginTop: 12 }}>
+              <button className="btn" type="button" onClick={approveBGradeUsagePrompt}>
+                B급으로 분류
+              </button>
+              <button className="btn secondary" type="button" onClick={continueNormalUsage}>
+                일반 사용 처리
+              </button>
+              <button className="btn secondary" type="button" onClick={() => setBGradeUsagePrompt(null)}>
+                취소
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {txEditForm ? (
         <div className="scannerOverlay" role="dialog" aria-modal="true" aria-label="최근 이력 수정">
           <div className="scannerModal">
@@ -2659,7 +2753,7 @@ export default function ManagementPage() {
                   checked={txEditForm.isBGrade}
                   onChange={(e) => setTxEditForm((prev) => (prev ? { ...prev, isBGrade: e.target.checked } : prev))}
                 />
-                B급
+                B급 사용
               </label>
               <div className="actions">
                 <button className="btn" type="submit" disabled={savingTxEdit}>
