@@ -318,6 +318,7 @@ export default function ManagementPage() {
   const [locationOptionsOpen, setLocationOptionsOpen] = useState(false);
   const [stockConfirmPart, setStockConfirmPart] = useState<Part | null>(null);
   const [bGradeUsagePrompt, setBGradeUsagePrompt] = useState<BGradeUsagePrompt | null>(null);
+  const [partHistoryModalPart, setPartHistoryModalPart] = useState<Part | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const [txEditForm, setTxEditForm] = useState<TxEditForm | null>(null);
   const [txHistorySearch, setTxHistorySearch] = useState("");
@@ -1116,6 +1117,10 @@ export default function ManagementPage() {
       );
     });
   }, [txHistory, txHistorySearch]);
+  const selectedPartHistory = useMemo(() => {
+    if (!partHistoryModalPart) return [];
+    return txHistory.filter((tx) => tx.part_id === partHistoryModalPart.id || tx.parts?.id === partHistoryModalPart.id);
+  }, [partHistoryModalPart, txHistory]);
 
   function submitSearch() {
     setSearch(searchInput.trim());
@@ -1231,6 +1236,10 @@ export default function ManagementPage() {
   async function continueNormalUsage() {
     setBGradeUsagePrompt(null);
     await performTxSubmit({ reclassifyToBGrade: false });
+  }
+
+  function openPartHistory(part: Part) {
+    setPartHistoryModalPart(part);
   }
 
   function openScanner(target: "search" | "tx" | "part") {
@@ -1828,7 +1837,9 @@ export default function ManagementPage() {
                       </button>
                       {part.spare_parts_identifier ? <div className="meta partMemo">{part.spare_parts_identifier}</div> : null}
                       <div className="badgeRow">
-                        <span className="softBadge">{formatSplitStock(part)}</span>
+                        <button className="softBadge textTrigger" type="button" onClick={() => openPartHistory(part)}>
+                          {formatSplitStock(part)}
+                        </button>
                         <span className="softBadge">{part.unit_of_quantity || "-"}</span>
                       </div>
                       <div className="kvGrid">
@@ -1888,7 +1899,11 @@ export default function ManagementPage() {
                           </button>
                           {part.spare_parts_identifier ? <div className="meta partMemo">{part.spare_parts_identifier}</div> : null}
                         </td>
-                        <td className={isPartLow(part, minimumStockValue) ? "low" : undefined}>{formatSplitStock(part)}</td>
+                        <td className={isPartLow(part, minimumStockValue) ? "low" : undefined}>
+                          <button className="textTrigger stockValueButton" type="button" onClick={() => openPartHistory(part)}>
+                            {formatSplitStock(part)}
+                          </button>
+                        </td>
                         <td>{part.unit_of_quantity || "-"}</td>
                         <td><LocationPreview position={part.position} description={locationInfo?.description} imageUrl={locationInfo?.image_url} /></td>
                         {isAdmin ? (
@@ -2495,6 +2510,101 @@ export default function ManagementPage() {
             <div className="panelNotice">품종등록은 관리자 계정만 사용할 수 있습니다.</div>
           </section>
         )
+      ) : null}
+
+      {partHistoryModalPart ? (
+        <div className="scannerOverlay" role="dialog" aria-modal="true" aria-label="품목 최근 이력">
+          <div className="scannerModal stockModal">
+            <div className="adminHeaderRow" style={{ marginBottom: 8 }}>
+              <div>
+                <h2 style={{ margin: 0 }}>품목 최근 이력</h2>
+                <div className="meta" style={{ marginTop: 4 }}>
+                  {partHistoryModalPart.item_number} / {partHistoryModalPart.designation} / 구분 {partHistoryModalPart.location || "-"} / 위치 {partHistoryModalPart.position || "-"}
+                </div>
+              </div>
+              <div className="actions">
+                <div className="meta">{selectedPartHistory.length}건</div>
+                <button className="btn secondary small" type="button" onClick={() => setPartHistoryModalPart(null)}>
+                  닫기
+                </button>
+              </div>
+            </div>
+            {isMobileLayout ? (
+              <div className="historyCards">
+                {selectedPartHistory.map((tx) => (
+                  <article key={tx.id} className="dataCard">
+                    <div className="dataCardHead">
+                      <strong>{tx.parts?.item_number || partHistoryModalPart.item_number}</strong>
+                      <span className={`txBadge ${tx.tx_type === "OUT" ? "out" : "in"}`}>{formatTxTypeLabel(tx.tx_type)}</span>
+                    </div>
+                    <div>{tx.parts?.designation || partHistoryModalPart.designation}</div>
+                    <div className="badgeRow">
+                      <span className="softBadge">{formatTransactionSplitQty(tx)}</span>
+                      <span className="softBadge">{tx.parts?.location || partHistoryModalPart.location || "구분 없음"}</span>
+                    </div>
+                    <div className="kvGrid">
+                      <div>
+                        <span className="meta">수량</span>
+                        <div>{formatTransactionSplitQty(tx)}</div>
+                      </div>
+                      <div>
+                        <span className="meta">날짜</span>
+                        <div>{new Date(tx.created_at).toLocaleDateString("ko-KR")}</div>
+                      </div>
+                      <div>
+                        <span className="meta">메모</span>
+                        <div>{tx.memo || "-"}</div>
+                      </div>
+                      <div>
+                        <span className="meta">사용자</span>
+                        <div>{tx.actor_name || "-"}</div>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+                {!loading && selectedPartHistory.length === 0 ? <div className="panelNotice">해당 품목의 최근 이력이 없습니다.</div> : null}
+              </div>
+            ) : (
+              <div className="historyWrap">
+                <table className="historyTable">
+                  <thead>
+                    <tr>
+                      <th>구분</th>
+                      <th>품목번호</th>
+                      <th>품명</th>
+                      <th>카테고리</th>
+                      <th>수량</th>
+                      <th>메모</th>
+                      <th>날짜</th>
+                      <th>사용자</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedPartHistory.map((tx) => (
+                      <tr key={tx.id}>
+                        <td>
+                          <span className={`txBadge ${tx.tx_type === "OUT" ? "out" : "in"}`}>{formatTxTypeLabel(tx.tx_type)}</span>
+                        </td>
+                        <td>{tx.parts?.item_number || partHistoryModalPart.item_number}</td>
+                        <td>{tx.parts?.designation || partHistoryModalPart.designation}</td>
+                        <td>{tx.parts?.location || partHistoryModalPart.location || "-"}</td>
+                        <td>{formatTransactionSplitQty(tx)}</td>
+                        <td>{tx.memo || "-"}</td>
+                        <td>{new Date(tx.created_at).toLocaleDateString("ko-KR")}</td>
+                        <td>{tx.actor_name || "-"}</td>
+                      </tr>
+                    ))}
+                    {!loading && selectedPartHistory.length === 0 ? (
+                      <tr>
+                        <td colSpan={8}>해당 품목의 최근 이력이 없습니다.</td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
       ) : null}
 
       {categoryModalOpen ? (
