@@ -65,15 +65,15 @@ const HELP_SECTIONS = [
       "처음 사용하는 파트가 있다면 먼저 관리자 권한이 있는 계정으로 로그인합니다.",
       "품종등록 화면에서 구분 관리와 위치 관리를 열고, 사용할 구분과 위치를 먼저 등록합니다.",
       "그 다음 품종등록에서 품목번호, 품명, 수량, 단위, B급 여부, 메모를 입력하고 구분과 파트 위치를 지정한 뒤 품종등록을 진행합니다.",
-      "처음 등록하는 파트는 품종등록을 먼저 하지 않으면 입고 사용처리에서 저장되지 않습니다.",
-      "품종등록이 되어 있지 않은 품목을 입고 사용처리하려 하면 '품종등록을 진행해 주세요.' 문구가 표시됩니다.",
+      "처음 등록하는 파트는 품종등록을 먼저 하지 않으면 입고/사용처리에서 저장되지 않습니다.",
+      "품종등록이 되어 있지 않은 품목을 입고/사용처리하려 하면 '품종등록을 진행해 주세요.' 문구가 표시됩니다.",
     ],
   },
   {
     title: "메뉴 안내",
     items: [
       "검색: 등록된 품목을 조건별로 검색하고 재고, 메모, 위치를 확인하는 화면입니다.",
-      "입고 사용처리: 선택한 품목을 기준으로 입고 또는 사용을 저장하는 화면입니다.",
+      "입고/사용처리: 선택한 품목을 기준으로 입고 또는 사용을 저장하는 화면입니다.",
       "입고 등록 파트: 품종등록된 전체 품목을 팝업으로 확인하고 검색하거나 정렬하는 기능입니다.",
       "품종등록: 신규 품목 등록, 기존 품목 수정, 구분 관리, 위치 관리를 진행하는 화면입니다.",
     ],
@@ -95,14 +95,14 @@ const HELP_SECTIONS = [
       "검색창 앞에서 전체, 구분, 품목명, 파트번호, 위치 중 하나를 선택한 뒤 검색어를 입력합니다.",
       "검색창에서도 바코드 스캔이 가능하며, 스캔값이 바로 검색어로 입력됩니다.",
       "검색 결과에는 품목번호, 품명, 메모, 재고, 단위, 위치가 표시됩니다.",
-      "검색 결과에서 품명을 누르면 '입고 사용처리를 진행하시겠습니까?' 확인창이 뜨고, 확인하면 입고 사용처리 화면으로 이동합니다.",
+      "검색 결과에서 품명을 누르면 '입고/사용처리를 진행하시겠습니까?' 확인창이 뜨고, 확인하면 입고/사용처리 화면으로 이동합니다.",
       "검색 결과가 없으면 검색 조건을 전체로 바꿔 다시 검색해 보는 것이 좋습니다.",
     ],
   },
   {
-    title: "입고 사용처리",
+    title: "입고/사용처리",
     items: [
-      "입고 사용처리는 선택한 품목 기준으로 진행합니다.",
+      "입고/사용처리는 선택한 품목 기준으로 진행합니다.",
       "검색 결과에서 품명을 눌러 넘어오거나, 품목번호를 입력해 후보가 하나로 정해지면 해당 품목으로 처리할 수 있습니다.",
       "같은 품목번호가 여러 개 있으면 후보 목록이 표시되므로, 구분과 위치를 보고 정확한 품목을 선택해야 합니다.",
       "입고/사용 구분, 수량, 날짜, 메모, B급 여부를 입력한 뒤 저장합니다.",
@@ -134,8 +134,8 @@ const HELP_SECTIONS = [
     items: [
       "변경사항이 보이지 않으면 브라우저 새로고침 또는 서버 재시작을 먼저 확인합니다.",
       "바코드 스캔이 안 될 경우 브라우저의 카메라 권한 허용 여부와 초점 거리를 확인합니다.",
-      "품종등록이 되지 않은 품목은 입고 사용처리 저장이 되지 않습니다.",
-      "같은 품목번호가 여러 개 등록된 경우에는 입고 사용처리 전에 정확한 품목을 선택해야 합니다.",
+      "품종등록이 되지 않은 품목은 입고/사용처리 저장이 되지 않습니다.",
+      "같은 품목번호가 여러 개 등록된 경우에는 입고/사용처리 전에 정확한 품목을 선택해야 합니다.",
     ],
   },
 ] as const;
@@ -1139,7 +1139,7 @@ export default function ManagementPage() {
     const qty = Number(txForm.qty);
     const createdAt = txForm.txDate ? new Date(`${txForm.txDate}T00:00:00`) : null;
     if (!selectedPart || !Number.isFinite(qty) || qty <= 0) {
-      setError("입고 사용처리할 품목을 정확히 선택하고 수량을 입력하세요.");
+      setError("입고/사용처리할 품목을 정확히 선택하고 수량을 입력하세요.");
       return;
     }
     if (!createdAt || Number.isNaN(createdAt.getTime())) {
@@ -1165,7 +1165,7 @@ export default function ManagementPage() {
 
     const json = (await res.json()) as { ok?: boolean; error?: string };
     if (!res.ok) {
-      setError(json.error || "입고 사용처리에 실패했습니다.");
+      setError(json.error || "입고/사용처리에 실패했습니다.");
       return;
     }
 
@@ -1636,7 +1636,7 @@ export default function ManagementPage() {
             검색
           </button>
           <button className={`tabButton ${activeTab === "stock" ? "active" : ""}`} type="button" onClick={() => setActiveTab("stock")}>
-            입고 사용처리
+            입고/사용처리
           </button>
           <button className="tabButton" type="button" onClick={() => setStockModalOpen(true)}>
             입고 등록 파트
@@ -1867,7 +1867,7 @@ export default function ManagementPage() {
       {activeTab === "stock" ? (
         <>
           <section className="panel" style={{ marginBottom: 16 }}>
-            <h2>입고 사용처리</h2>
+            <h2>입고/사용처리</h2>
             <form onSubmit={submitTx}>
               <div className="formRow">
                 <label className="label">품목 선택</label>
@@ -2576,16 +2576,16 @@ export default function ManagementPage() {
       ) : null}
 
       {stockConfirmPart ? (
-        <div className="scannerOverlay" role="dialog" aria-modal="true" aria-label="입고 사용처리 진행 확인">
+        <div className="scannerOverlay" role="dialog" aria-modal="true" aria-label="입고/사용처리 진행 확인">
           <div className="scannerModal">
             <div className="adminHeaderRow" style={{ marginBottom: 8 }}>
-              <h2 style={{ margin: 0 }}>입고 사용처리 진행</h2>
+              <h2 style={{ margin: 0 }}>입고/사용처리 진행</h2>
               <button className="btn secondary small" type="button" onClick={() => setStockConfirmPart(null)}>
                 닫기
               </button>
             </div>
             <div className="scannerGuide">
-              입고 사용처리를 진행하시겠습니까?
+              입고/사용처리를 진행하시겠습니까?
             </div>
             <div className="scannerConfirmBox">
               <div><strong>{stockConfirmPart.designation}</strong></div>
@@ -2696,7 +2696,7 @@ export default function ManagementPage() {
               <div className="scannerAim" aria-hidden="true" />
             </div>
             <div className="meta" style={{ marginTop: 8 }}>
-              {(scannerTarget === "search" ? "[검색] " : scannerTarget === "part" ? "[품종 등록] " : "[입고 사용처리] ") + (scannerError || scannerStatus)}
+              {(scannerTarget === "search" ? "[검색] " : scannerTarget === "part" ? "[품종 등록] " : "[입고/사용처리] ") + (scannerError || scannerStatus)}
             </div>
             <div className="meta" style={{ marginTop: 4 }}>
               손전등: {scannerTorchSupported ? "지원됨" : "미지원/확인중"}
