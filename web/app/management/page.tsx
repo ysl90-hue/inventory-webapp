@@ -67,6 +67,21 @@ type BGradeUsagePrompt = {
   qty: number;
 };
 
+type TxActionConfirm =
+  | {
+      kind: "edit";
+      form: TxEditForm;
+    }
+  | {
+      kind: "delete";
+      tx: StockTransaction;
+    };
+
+type TxActionResult = {
+  title: string;
+  message: string;
+};
+
 const HELP_SECTIONS = [
   {
     title: "시작하기",
@@ -321,6 +336,8 @@ export default function ManagementPage() {
   const [stockConfirmPart, setStockConfirmPart] = useState<Part | null>(null);
   const [bGradeUsagePrompt, setBGradeUsagePrompt] = useState<BGradeUsagePrompt | null>(null);
   const [partHistoryModalPart, setPartHistoryModalPart] = useState<Part | null>(null);
+  const [txActionConfirm, setTxActionConfirm] = useState<TxActionConfirm | null>(null);
+  const [txActionResult, setTxActionResult] = useState<TxActionResult | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const [txEditForm, setTxEditForm] = useState<TxEditForm | null>(null);
   const [txHistorySearch, setTxHistorySearch] = useState("");
@@ -1576,26 +1593,42 @@ export default function ManagementPage() {
     event.preventDefault();
     if (!txEditForm || !session?.access_token) return;
     setError(null);
+    const createdAt = txEditForm.txDate ? new Date(`${txEditForm.txDate}T00:00:00`) : null;
+    if (!createdAt || Number.isNaN(createdAt.getTime())) {
+      setError("수정할 날짜를 정확히 입력하세요.");
+      return;
+    }
+
+    setTxActionConfirm({
+      kind: "edit",
+      form: { ...txEditForm },
+    });
+  }
+
+  async function confirmTransactionEdit(form: TxEditForm) {
+    if (!session?.access_token) return;
+    setError(null);
     setSavingTxEdit(true);
+    setTxActionConfirm(null);
 
     try {
-      const createdAt = txEditForm.txDate ? new Date(`${txEditForm.txDate}T00:00:00`) : null;
+      const createdAt = form.txDate ? new Date(`${form.txDate}T00:00:00`) : null;
       if (!createdAt || Number.isNaN(createdAt.getTime())) {
         setError("수정할 날짜를 정확히 입력하세요.");
         return;
       }
-      const res = await fetch(`/api/transactions/${txEditForm.id}`, {
+      const res = await fetch(`/api/transactions/${form.id}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
-          txType: txEditForm.txType,
-          qty: Number(txEditForm.qty),
+          txType: form.txType,
+          qty: Number(form.qty),
           createdAt: createdAt.toISOString(),
-          memo: txEditForm.memo.trim() || null,
-          isBGrade: txEditForm.isBGrade,
+          memo: form.memo.trim() || null,
+          isBGrade: form.isBGrade,
         }),
       });
       const json = (await res.json()) as { error?: string };
@@ -1604,8 +1637,11 @@ export default function ManagementPage() {
         return;
       }
       setTxEditForm(null);
-      showSuccessToast("최근 이력 수정 완료");
       await loadData();
+      setTxActionResult({
+        title: "최근 이력 수정 완료",
+        message: `${form.itemNumber} / ${form.designation} 이력이 수정되었습니다.`,
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : "최근 이력 수정에 실패했습니다.");
     } finally {
@@ -1619,12 +1655,16 @@ export default function ManagementPage() {
       return;
     }
 
-    const confirmed = window.confirm(
-      `${tx.parts?.item_number || "-"} / ${tx.tx_type} / ${tx.qty} 이력을 삭제하시겠습니까?`,
-    );
-    if (!confirmed) return;
+    setTxActionConfirm({
+      kind: "delete",
+      tx,
+    });
+  }
 
+  async function confirmDeleteTransaction(tx: StockTransaction) {
+    if (!session?.access_token) return;
     setError(null);
+    setTxActionConfirm(null);
     try {
       const res = await fetch(`/api/transactions/${tx.id}`, {
         method: "DELETE",
@@ -1637,8 +1677,11 @@ export default function ManagementPage() {
         setError(json.error || "최근 이력 삭제에 실패했습니다.");
         return;
       }
-      showSuccessToast("최근 이력 삭제 완료");
       await loadData();
+      setTxActionResult({
+        title: "최근 이력 삭제 완료",
+        message: `${tx.parts?.item_number || "-"} 이력이 삭제되었고 재고도 함께 원복되었습니다.`,
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : "최근 이력 삭제에 실패했습니다.");
     }
@@ -2806,6 +2849,87 @@ export default function ManagementPage() {
               </button>
               <button className="btn secondary" type="button" onClick={() => setBGradeUsagePrompt(null)}>
                 취소
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {txActionConfirm ? (
+        <div className="scannerOverlay" role="dialog" aria-modal="true" aria-label="최근 이력 작업 확인">
+          <div className="scannerModal">
+            <div className="adminHeaderRow" style={{ marginBottom: 8 }}>
+              <h2 style={{ margin: 0 }}>{txActionConfirm.kind === "edit" ? "최근 이력 수정 확인" : "최근 이력 삭제 확인"}</h2>
+              <button className="btn secondary small" type="button" onClick={() => setTxActionConfirm(null)}>
+                닫기
+              </button>
+            </div>
+            {txActionConfirm.kind === "edit" ? (
+              <>
+                <div className="scannerGuide">
+                  최근 이력을 수정하시겠습니까?
+                </div>
+                <div className="scannerConfirmBox">
+                  <div><strong>{txActionConfirm.form.itemNumber} / {txActionConfirm.form.designation}</strong></div>
+                  <div className="meta" style={{ marginTop: 4 }}>
+                    {txActionConfirm.form.txType === "IN" ? "입고" : "사용"} / 수량 {txActionConfirm.form.qty} / 날짜 {txActionConfirm.form.txDate}
+                  </div>
+                  <div className="meta" style={{ marginTop: 6 }}>
+                    수정이 완료되면 재고도 변경된 내용 기준으로 다시 계산됩니다.
+                  </div>
+                </div>
+                <div className="actions" style={{ marginTop: 12 }}>
+                  <button className="btn" type="button" onClick={() => void confirmTransactionEdit(txActionConfirm.form)}>
+                    수정 진행
+                  </button>
+                  <button className="btn secondary" type="button" onClick={() => setTxActionConfirm(null)}>
+                    취소
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="scannerGuide">
+                  최근 이력을 삭제하시겠습니까?
+                </div>
+                <div className="scannerConfirmBox">
+                  <div><strong>{txActionConfirm.tx.parts?.item_number || "-"} / {txActionConfirm.tx.parts?.designation || "-"}</strong></div>
+                  <div className="meta" style={{ marginTop: 4 }}>
+                    {formatTxTypeLabel(txActionConfirm.tx.tx_type)} / 수량 {txActionConfirm.tx.qty}
+                  </div>
+                  <div className="meta" style={{ marginTop: 6 }}>
+                    삭제가 완료되면 이력 기록이 지워지고, 재고 수량도 원래 상태로 함께 원복됩니다.
+                  </div>
+                </div>
+                <div className="actions" style={{ marginTop: 12 }}>
+                  <button className="btn danger" type="button" onClick={() => void confirmDeleteTransaction(txActionConfirm.tx)}>
+                    삭제 진행
+                  </button>
+                  <button className="btn secondary" type="button" onClick={() => setTxActionConfirm(null)}>
+                    취소
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {txActionResult ? (
+        <div className="scannerOverlay" role="dialog" aria-modal="true" aria-label="최근 이력 작업 완료">
+          <div className="scannerModal">
+            <div className="adminHeaderRow" style={{ marginBottom: 8 }}>
+              <h2 style={{ margin: 0 }}>{txActionResult.title}</h2>
+              <button className="btn secondary small" type="button" onClick={() => setTxActionResult(null)}>
+                닫기
+              </button>
+            </div>
+            <div className="scannerConfirmBox">
+              <div>{txActionResult.message}</div>
+            </div>
+            <div className="actions" style={{ marginTop: 12 }}>
+              <button className="btn" type="button" onClick={() => setTxActionResult(null)}>
+                확인
               </button>
             </div>
           </div>
