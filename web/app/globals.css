@@ -77,6 +77,20 @@ a {
   margin-top: 10px;
 }
 
+.quickStatsPanel {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.quickStatCard {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  background: rgba(255, 253, 250, 0.72);
+}
+
 .modalToolbar {
   display: grid;
   grid-template-columns: 150px minmax(0, 1fr) 180px;
@@ -118,6 +132,220 @@ a {
 .candidateItem.active {
   border-color: #7ab7aa;
   background: #e7f3ef;
+}
+
+.quickActionRow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.statusPill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 253, 250, 0.9);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.statusPill.ready {
+  background: #e8f7ef;
+  border-color: #b9e3c8;
+  color: #166534;
+}
+
+.statusPill.warn {
+  background: #fff1f1;
+  border-color: #efc7c7;
+  color: #991b1b;
+}
+
+.statusPill.pending {
+  background: #fff7e8;
+  border-color: #edd8ab;
+  color: #9a6700;
+}
+
+.selectionSummaryCard {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(255, 253, 250, 0.8);
+}
+
+.selectionSummaryCard.ready {
+  border-color: #b9e3c8;
+  background: rgba(232, 247, 239, 0.56);
+}
+
+.selectionSummaryCard.warn {
+  border-color: #efc7c7;
+  background: rgba(255, 241, 241, 0.72);
+}
+
+.selectionSummaryCard.pending {
+  border-color: #edd8ab;
+  background: rgba(255, 247, 232, 0.75);
+}
+
+.selectionSummaryHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.selectionMetaRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.selectionStatsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.selectionStatBox {
+  border-radius: 12px;
+  border: 1px solid rgba(159, 207, 195, 0.45);
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.fieldHint {
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(255, 253, 250, 0.72);
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.fieldHint.ready {
+  border-color: #b9e3c8;
+  background: rgba(232, 247, 239, 0.5);
+  color: #166534;
+}
+
+.fieldHint.warn {
+  border-color: #efc7c7;
+  background: rgba(255, 241, 241, 0.72);
+  color: #991b1b;
+}
+
+.fieldHint.pending {
+  border-color: #edd8ab;
+  background: rgba(255, 247, 232, 0.75);
+  color: #9a6700;
+}
+
+.modeToggle {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.modeToggleButton {
+  min-height: 42px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(255, 253, 250, 0.85);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.modeToggleButton.active {
+  border-color: #7ab7aa;
+  background: #d9efe7;
+  color: #0f5f58;
+}
+
+.modeToggleButton.active.out {
+  border-color: #efc7c7;
+  background: #fdecec;
+  color: #991b1b;
+}
+
+.unitBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 64px;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(255, 253, 250, 0.85);
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.quickStepRow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.segmentedToggle {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.segmentButton {
+  min-height: 42px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(255, 253, 250, 0.85);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.segmentButton.active {
+  border-color: #7ab7aa;
+  background: #d9efe7;
+  color: #0f5f58;
+}
+
+.segmentButton.warn.active {
+  border-color: #efc7c7;
+  background: #fdecec;
+  color: #991b1b;
+}
+
+.historyMiniList {
+  display: grid;
+  gap: 10px;
+}
+
+.historyMiniItem {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(255, 253, 250, 0.82);
+}
+
+.historyMiniHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .filterChips {
@@ -870,6 +1098,10 @@ th {
     grid-template-columns: 1fr;
   }
 
+  .quickStatsPanel {
+    grid-template-columns: 1fr;
+  }
+
   .toolbarActions {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -954,9 +1186,17 @@ th {
   }
 
   .inlineLabelRow,
-  .manageRow {
+  .manageRow,
+  .selectionSummaryHead,
+  .historyMiniHead {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .selectionStatsGrid,
+  .segmentedToggle,
+  .modeToggle {
+    grid-template-columns: 1fr;
   }
 
   .btn {
