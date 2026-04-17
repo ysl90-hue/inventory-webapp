@@ -254,7 +254,7 @@ function formatTransactionSplitQty(tx: StockTransaction) {
 function formatTxTypeLabel(txType: "IN" | "OUT" | "ADJUST") {
   if (txType === "IN") return "입고";
   if (txType === "OUT") return "사용";
-  return "보정";
+  return "수정내역";
 }
 
 function formatTxModeLabel(txType: "IN" | "OUT") {
@@ -1207,6 +1207,7 @@ export default function ManagementPage() {
   const filteredTxHistory = useMemo(() => {
     const keyword = txHistorySearch.trim().toLowerCase();
     return txHistory.filter((tx) => {
+      if (txHistoryFilter === "ALL" && tx.tx_type === "ADJUST") return false;
       if (txHistoryFilter !== "ALL" && tx.tx_type !== txHistoryFilter) return false;
       if (txHistoryOnlySelectedPart && selectedPart) {
         const historyPartId = tx.part_id || tx.parts?.id;
@@ -2526,7 +2527,7 @@ export default function ManagementPage() {
                 사용
               </button>
               <button className={`btn secondary small ${txHistoryFilter === "ADJUST" ? "activeChoice" : ""}`} type="button" onClick={() => setTxHistoryFilter("ADJUST")}>
-                보정
+                수정내역
               </button>
               {selectedPart ? (
                 <button
@@ -2616,7 +2617,7 @@ export default function ManagementPage() {
                         <td>{tx.actor_name || "-"}</td>
                         <td>
                           {tx.tx_type === "ADJUST" ? (
-                            <span className="meta">보정 이력</span>
+                            <span className="meta">수정내역</span>
                           ) : (
                             <div className="actions">
                               <button className="btn secondary small" type="button" onClick={() => startEditTransaction(tx)}>
