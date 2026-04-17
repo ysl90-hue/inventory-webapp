@@ -1933,7 +1933,7 @@ export default function ManagementPage() {
             <div className="meta">
               {authDisplayName || session.user.email?.split("@")[0] || "Logged in"} {"·"} <strong>{isAdmin ? "ADMIN" : "USER"}</strong>
             </div>
-            <VersionHistory compact />
+            <VersionHistory compact autoOpenOnMount />
           </div>
           <div className="actions">
             <button className="btn secondary small" type="button" onClick={() => setHelpOpen(true)}>
