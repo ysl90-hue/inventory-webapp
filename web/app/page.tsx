@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
+import { VersionHistory } from "@/components/version-history";
 import {
   canUseCurrentSession,
   clearCurrentSessionMarker,
@@ -238,6 +239,7 @@ export default function LoginPage() {
         <div>
           <h1 className="title">6호기 파트 관리 프로그램</h1>
         </div>
+        <VersionHistory />
       </header>
 
       {error ? (

@@ -4,6 +4,7 @@ import { FormEvent, useDeferredValue, useEffect, useMemo, useRef, useState } fro
 import { useRouter } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
+import { VersionHistory } from "@/components/version-history";
 import { canUseCurrentSession, clearCurrentSessionMarker, getShouldKeepLogin } from "@/lib/auth-session";
 import { normalizeCategory, normalizeUnit, UNIT_OPTIONS } from "@/lib/inventory";
 import type { Part, PartCategory, PartLocation, StockTransaction } from "@/lib/types";
@@ -1928,8 +1929,11 @@ export default function ManagementPage() {
 
       <section className="panel" style={{ marginBottom: 14 }}>
         <div className="authRow" style={{ justifyContent: "space-between" }}>
-          <div className="meta">
-            {authDisplayName || session.user.email?.split("@")[0] || "Logged in"} {"·"} <strong>{isAdmin ? "ADMIN" : "USER"}</strong>
+          <div className="authMetaBlock">
+            <div className="meta">
+              {authDisplayName || session.user.email?.split("@")[0] || "Logged in"} {"·"} <strong>{isAdmin ? "ADMIN" : "USER"}</strong>
+            </div>
+            <VersionHistory compact />
           </div>
           <div className="actions">
             <button className="btn secondary small" type="button" onClick={() => setHelpOpen(true)}>
