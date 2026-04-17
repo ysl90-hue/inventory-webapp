@@ -5,9 +5,19 @@ export type ReleaseNote = {
   items: string[];
 };
 
-export const APP_VERSION = "v1.3.0";
+export const APP_VERSION = "v1.4.0";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
+  {
+    version: "v1.4.0",
+    date: "2026-04-17",
+    summary: "검색과 전체 품목 팝업, 기준정보 관리 화면을 더 빠르게 쓰도록 개선했습니다.",
+    items: [
+      "검색 결과를 구분과 위치 기준으로 다시 좁힐 수 있는 보조 필터를 추가했습니다.",
+      "입고 등록 파트 팝업에서 부족 재고와 최근 처리 품목을 강조하고 바로 입고, 사용, 이력 확인이 가능해졌습니다.",
+      "구분과 위치 관리 목록에서 등록된 파트 수와 위치 이미지를 함께 확인할 수 있게 했습니다.",
+    ],
+  },
   {
     version: "v1.3.0",
     date: "2026-04-17",

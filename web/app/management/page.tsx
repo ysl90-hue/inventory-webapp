@@ -332,6 +332,8 @@ export default function ManagementPage() {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [searchField, setSearchField] = useState<PartSearchField>("all");
+  const [searchCategoryFilter, setSearchCategoryFilter] = useState<string>("ALL");
+  const [searchPositionFilter, setSearchPositionFilter] = useState<string>("ALL");
   const [showLowOnly, setShowLowOnly] = useState(false);
   const [partsSort, setPartsSort] = useState<"item" | "stockAsc" | "stockDesc" | "designation">("item");
   const [loading, setLoading] = useState(true);
@@ -452,6 +454,22 @@ export default function ManagementPage() {
         ? "수정 저장 전에 입력값과 기존 품목 중복 여부를 확인하세요."
         : "등록 준비가 거의 끝났습니다. 저장 전 미리보기를 확인하세요."
       : `필수 입력 ${adminCompletedCount}/${adminChecklist.length} 완료. 남은 항목을 채우면 등록 실수를 줄일 수 있습니다.`;
+  const partsPerCategory = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const part of parts) {
+      const key = (part.location || "미분류").trim();
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    return counts;
+  }, [parts]);
+  const partsPerLocation = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const part of parts) {
+      const key = (part.position || "미지정").trim().toUpperCase() || "미지정";
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    return counts;
+  }, [parts]);
 
   function stopScannerResources() {
     if (scannerCloseTimerRef.current) {
@@ -1134,7 +1152,9 @@ export default function ManagementPage() {
     }
     const filtered = parts.filter((part) => {
       const hit = matchesPartSearch(part, keyword, searchField) || (searchField === "all" && (part.is_b_grade ? "b급" : "").includes(keyword));
-      return hit && (!showLowOnly || isPartLow(part, minimumStockValue));
+      const categoryMatch = searchCategoryFilter === "ALL" || (part.location || "미분류") === searchCategoryFilter;
+      const positionMatch = searchPositionFilter === "ALL" || ((part.position || "미지정").toUpperCase() || "미지정") === searchPositionFilter;
+      return hit && categoryMatch && positionMatch && (!showLowOnly || isPartLow(part, minimumStockValue));
     });
 
     filtered.sort((a, b) => {
@@ -1144,7 +1164,23 @@ export default function ManagementPage() {
       return a.item_number.localeCompare(b.item_number);
     });
     return filtered;
-  }, [minimumStockValue, parts, partsSort, search, searchField, showLowOnly]);
+  }, [minimumStockValue, parts, partsSort, search, searchCategoryFilter, searchField, searchPositionFilter, showLowOnly]);
+  const searchCategoryOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const part of parts) {
+      const key = part.location || "미분류";
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [parts]);
+  const searchPositionOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const part of parts) {
+      const key = (part.position || "미지정").toUpperCase() || "미지정";
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [parts]);
 
   const inboundParts = useMemo(() => {
     return [...parts].sort((a, b) => a.item_number.localeCompare(b.item_number));
@@ -1167,6 +1203,13 @@ export default function ManagementPage() {
 
     return filtered;
   }, [inboundParts, stockModalSearch, stockModalSearchField, stockModalSort]);
+  const recentTouchedPartIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const tx of txHistory.slice(0, 12)) {
+      if (tx.part_id) ids.add(tx.part_id);
+    }
+    return ids;
+  }, [txHistory]);
 
   const lowCount = parts.filter((part) => isPartLow(part, minimumStockValue)).length;
   const inboundRegisteredCount = inboundParts.length;
@@ -1259,6 +1302,8 @@ export default function ManagementPage() {
     setSearchInput("");
     setSearch("");
     setShowLowOnly(false);
+    setSearchCategoryFilter("ALL");
+    setSearchPositionFilter("ALL");
   }
 
   function setTxType(next: "IN" | "OUT") {
@@ -2113,6 +2158,53 @@ export default function ManagementPage() {
             </section>
           ) : null}
 
+          {search.trim().length > 0 ? (
+            <section className="panel" style={{ marginBottom: 14 }}>
+              <div className="adminHeaderRow">
+                <h2 style={{ margin: 0 }}>결과 보조 필터</h2>
+                <div className="meta">검색 결과를 구분과 위치로 다시 좁힐 수 있습니다.</div>
+              </div>
+              <div className="searchAssistGrid">
+                <div>
+                  <div className="meta" style={{ marginBottom: 8 }}>구분</div>
+                  <div className="filterChips">
+                    <button className={`btn secondary small ${searchCategoryFilter === "ALL" ? "activeChoice" : ""}`} type="button" onClick={() => setSearchCategoryFilter("ALL")}>
+                      전체
+                    </button>
+                    {searchCategoryOptions.map(([name, count]) => (
+                      <button
+                        key={name}
+                        className={`btn secondary small ${searchCategoryFilter === name ? "activeChoice" : ""}`}
+                        type="button"
+                        onClick={() => setSearchCategoryFilter(name)}
+                      >
+                        {name} {count}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div className="meta" style={{ marginBottom: 8 }}>위치</div>
+                  <div className="filterChips">
+                    <button className={`btn secondary small ${searchPositionFilter === "ALL" ? "activeChoice" : ""}`} type="button" onClick={() => setSearchPositionFilter("ALL")}>
+                      전체
+                    </button>
+                    {searchPositionOptions.slice(0, 10).map(([code, count]) => (
+                      <button
+                        key={code}
+                        className={`btn secondary small ${searchPositionFilter === code ? "activeChoice" : ""}`}
+                        type="button"
+                        onClick={() => setSearchPositionFilter(code)}
+                      >
+                        {code} {count}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </section>
+          ) : null}
+
           <section className="panel">
             <div className="adminHeaderRow">
               <h2 style={{ margin: 0 }}>검색 결과</h2>
@@ -2680,10 +2772,26 @@ export default function ManagementPage() {
                 <option value="stockAsc">재고적은순</option>
               </select>
             </div>
+            <section className="quickStatsPanel" style={{ marginBottom: 12 }}>
+              <div className="quickStatCard">
+                <div className="meta">전체 품목</div>
+                <strong>{filteredInboundParts.length}건</strong>
+              </div>
+              <div className="quickStatCard">
+                <div className="meta">부족 재고</div>
+                <strong>{filteredInboundParts.filter((part) => isPartLow(part, minimumStockValue)).length}건</strong>
+              </div>
+              <div className="quickStatCard">
+                <div className="meta">최근 처리 품목</div>
+                <strong>{filteredInboundParts.filter((part) => recentTouchedPartIds.has(part.id)).length}건</strong>
+              </div>
+            </section>
             {isMobileLayout ? (
               <div className="partsCards">
                 {filteredInboundParts.map((part) => {
                   const locationInfo = locationsByCode.get((part.position || "").toUpperCase());
+                  const isRecent = recentTouchedPartIds.has(part.id);
+                  const isLow = isPartLow(part, minimumStockValue);
                   return (
                   <article key={part.id} className="dataCard">
                     <div className="dataCardHead">
@@ -2696,6 +2804,8 @@ export default function ManagementPage() {
                     <div className="badgeRow">
                       <span className="softBadge">{formatSplitStock(part)}</span>
                       <span className="softBadge">{part.unit_of_quantity || "-"}</span>
+                      {isLow ? <span className="softBadge warn">부족 재고</span> : null}
+                      {isRecent ? <span className="softBadge">최근 처리</span> : null}
                     </div>
                     <div className="kvGrid">
                       <div>
@@ -2706,6 +2816,17 @@ export default function ManagementPage() {
                         <span className="meta">최소재고</span>
                         <div>{minimumStockLabel || part.minimum_stock || "-"}</div>
                       </div>
+                    </div>
+                    <div className="quickActionRow" style={{ marginTop: 10 }}>
+                      <button className="btn small" type="button" onClick={() => handleSearchQuickAction(part, "IN")}>
+                        입고
+                      </button>
+                      <button className="btn danger small" type="button" onClick={() => handleSearchQuickAction(part, "OUT")}>
+                        사용
+                      </button>
+                      <button className="btn secondary small" type="button" onClick={() => openPartHistory(part)}>
+                        이력
+                      </button>
                     </div>
                     {isAdmin ? (
                       <div className="actions" style={{ marginTop: 10 }}>
@@ -2732,12 +2853,15 @@ export default function ManagementPage() {
                       <th>재고</th>
                       <th>단위</th>
                       <th>위치</th>
+                      <th>빠른 작업</th>
                       {isAdmin ? <th>관리</th> : null}
                     </tr>
                   </thead>
                   <tbody>
                     {filteredInboundParts.map((part) => {
                       const locationInfo = locationsByCode.get((part.position || "").toUpperCase());
+                      const isRecent = recentTouchedPartIds.has(part.id);
+                      const isLow = isPartLow(part, minimumStockValue);
                       return (
                       <tr key={part.id}>
                         <td>{part.location || "-"}</td>
@@ -2745,10 +2869,29 @@ export default function ManagementPage() {
                         <td>
                           <div>{part.designation}</div>
                           {part.spare_parts_identifier ? <div className="meta partMemo">{part.spare_parts_identifier}</div> : null}
+                          {(isRecent || isLow) ? (
+                            <div className="badgeRow" style={{ marginTop: 6 }}>
+                              {isLow ? <span className="softBadge warn">부족 재고</span> : null}
+                              {isRecent ? <span className="softBadge">최근 처리</span> : null}
+                            </div>
+                          ) : null}
                         </td>
-                        <td>{formatSplitStock(part)}</td>
+                        <td className={isLow ? "low" : undefined}>{formatSplitStock(part)}</td>
                         <td>{part.unit_of_quantity || "-"}</td>
                         <td><LocationPreview position={part.position} description={locationInfo?.description} imageUrl={locationInfo?.image_url} /></td>
+                        <td>
+                          <div className="actions">
+                            <button className="btn small" type="button" onClick={() => handleSearchQuickAction(part, "IN")}>
+                              입고
+                            </button>
+                            <button className="btn danger small" type="button" onClick={() => handleSearchQuickAction(part, "OUT")}>
+                              사용
+                            </button>
+                            <button className="btn secondary small" type="button" onClick={() => openPartHistory(part)}>
+                              이력
+                            </button>
+                          </div>
+                        </td>
                         {isAdmin ? (
                           <td>
                             <div className="actions">
@@ -2765,7 +2908,7 @@ export default function ManagementPage() {
                     )})}
                     {!loading && filteredInboundParts.length === 0 ? (
                       <tr>
-                        <td colSpan={isAdmin ? 7 : 6}>조건에 맞는 입고 등록 품목이 없습니다.</td>
+                        <td colSpan={isAdmin ? 8 : 7}>조건에 맞는 입고 등록 품목이 없습니다.</td>
                       </tr>
                     ) : null}
                   </tbody>
@@ -3255,6 +3398,7 @@ export default function ManagementPage() {
                 <div key={category.id} className="manageRow">
                   <div className="manageRowBody">
                     <strong>{category.name}</strong>
+                    <span className="meta">등록된 파트 {partsPerCategory.get(category.name) || 0}개</span>
                   </div>
                   <div className="actions">
                     <button className="btn secondary small" type="button" onClick={() => startEditCategory(category)}>
@@ -3334,6 +3478,12 @@ export default function ManagementPage() {
                   <div className="manageRowBody">
                     <strong>{location.code}</strong>
                     <span className="meta">{location.description || "설명 없음"}</span>
+                    <span className="meta">등록된 파트 {partsPerLocation.get(location.code) || 0}개</span>
+                    {location.image_url ? (
+                      <div className="manageImagePreview">
+                        <img src={location.image_url} alt={`${location.code} 위치`} className="locationImage" />
+                      </div>
+                    ) : null}
                   </div>
                   <div className="actions">
                     <button className="btn secondary small" type="button" onClick={() => startEditLocation(location)}>

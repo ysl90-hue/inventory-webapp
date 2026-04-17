@@ -131,6 +131,12 @@ a {
   background: rgba(255, 253, 250, 0.72);
 }
 
+.searchAssistGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .mobileQuickPanel {
   display: grid;
   gap: 10px;
@@ -1251,6 +1257,10 @@ th {
   }
 
   .quickStatsPanel {
+    grid-template-columns: 1fr;
+  }
+
+  .searchAssistGrid {
     grid-template-columns: 1fr;
   }
 
