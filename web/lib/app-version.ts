@@ -5,18 +5,9 @@ export type ReleaseNote = {
   items: string[];
 };
 
-export const APP_VERSION = "v1.2.3";
+export const APP_VERSION = "v1.2.2";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
-  {
-    version: "v1.2.3",
-    date: "2026-04-17",
-    summary: "업데이트 내역 팝업이 다른 화면 요소에 가려지지 않도록 우선순위를 조정했습니다.",
-    items: [
-      "업데이트 내역 오버레이의 표시 우선순위를 높여 검색과 고정 UI 위에 뜨도록 수정했습니다.",
-      "팝업이 화면 앞에 안정적으로 표시되도록 겹침 동작을 보강했습니다.",
-    ],
-  },
   {
     version: "v1.2.2",
     date: "2026-04-17",
