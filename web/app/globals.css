@@ -1002,6 +1002,7 @@ th {
 .releaseOverlay {
   padding: 32px 16px;
   align-items: center;
+  z-index: 1400;
 }
 
 .helpIntro {
