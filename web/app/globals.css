@@ -1051,16 +1051,6 @@ th {
   font-size: 0.92rem;
 }
 
-.releaseActions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
-}
-
 .helpSection {
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -1350,8 +1340,7 @@ th {
   .historyMiniHead,
   .adminSectionHead,
   .adminChecklistItem,
-  .releaseHead,
-  .releaseActions {
+  .releaseHead {
     align-items: stretch;
     flex-direction: column;
   }

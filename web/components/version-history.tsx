@@ -98,13 +98,16 @@ export function VersionHistory({
                     </div>
                   </div>
                   <div className="actions">
+                    <button className="btn secondary small" type="button" onClick={dismissForToday}>
+                      오늘은 보지 않기
+                    </button>
                     <button className="btn secondary small" type="button" onClick={() => setOpen(false)}>
                       닫기
                     </button>
                   </div>
                 </div>
                 <div className="helpIntro">
-                  다음 업데이트부터는 `web/lib/app-version.ts`에서 버전과 요약을 추가하면 화면에 바로 반영됩니다.
+                  최근 반영된 변경사항을 간단히 확인할 수 있습니다.
                 </div>
                 <div className="releaseList">
                   {RELEASE_NOTES.map((note) => (
@@ -124,14 +127,6 @@ export function VersionHistory({
                       </ul>
                     </section>
                   ))}
-                </div>
-                <div className="releaseActions">
-                  <button className="btn secondary" type="button" onClick={dismissForToday}>
-                    오늘은 보지 않기
-                  </button>
-                  <button className="btn" type="button" onClick={() => setOpen(false)}>
-                    닫기
-                  </button>
                 </div>
               </div>
             </div>,
