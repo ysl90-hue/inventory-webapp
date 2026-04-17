@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { APP_VERSION, RELEASE_NOTES } from "@/lib/app-version";
 
 type VersionHistoryProps = {
@@ -9,6 +9,19 @@ type VersionHistoryProps = {
 
 export function VersionHistory({ compact = false }: VersionHistoryProps) {
   const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open]);
 
   return (
     <>
@@ -20,8 +33,14 @@ export function VersionHistory({ compact = false }: VersionHistoryProps) {
       </div>
 
       {open ? (
-        <div className="scannerOverlay" role="dialog" aria-modal="true" aria-label="업데이트 내역">
-          <div className="scannerModal releaseModal">
+        <div
+          className="scannerOverlay releaseOverlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="업데이트 내역"
+          onClick={() => setOpen(false)}
+        >
+          <div className="scannerModal releaseModal" onClick={(event) => event.stopPropagation()}>
             <div className="adminHeaderRow" style={{ marginBottom: 8 }}>
               <div>
                 <h2 style={{ margin: 0 }}>업데이트 내역</h2>
@@ -29,9 +48,11 @@ export function VersionHistory({ compact = false }: VersionHistoryProps) {
                   현재 버전 {APP_VERSION}
                 </div>
               </div>
-              <button className="btn secondary small" type="button" onClick={() => setOpen(false)}>
-                닫기
-              </button>
+              <div className="actions">
+                <button className="btn secondary small" type="button" onClick={() => setOpen(false)}>
+                  닫기
+                </button>
+              </div>
             </div>
             <div className="helpIntro">
               다음 업데이트부터는 `web/lib/app-version.ts`에서 버전과 요약을 추가하면 화면에 바로 반영됩니다.

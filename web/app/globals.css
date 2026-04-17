@@ -991,6 +991,12 @@ th {
   width: min(760px, calc(100vw - 32px));
   max-height: 88vh;
   overflow: auto;
+  border-radius: 18px;
+}
+
+.releaseOverlay {
+  padding: 16px;
+  align-items: center;
 }
 
 .helpIntro {
@@ -1287,6 +1293,18 @@ th {
   .manageModal {
     width: 100%;
     max-height: 90svh;
+  }
+
+  .releaseOverlay {
+    padding: 16px;
+    align-items: center;
+  }
+
+  .releaseModal {
+    width: min(760px, calc(100vw - 32px));
+    border-radius: 18px;
+    border-bottom: 1px solid var(--line);
+    max-height: min(88svh, 760px);
   }
 
   .stockHistoryWrap {
