@@ -418,6 +418,35 @@ export default function ManagementPage() {
       return location.code.toUpperCase().includes(keyword) || (location.description || "").toUpperCase().includes(keyword);
     });
   }, [locations, partForm.position]);
+  const normalizedPartItemNumber = partForm.itemNumber.trim().toUpperCase();
+  const normalizedPartDesignation = partForm.designation.trim();
+  const normalizedPartCategory = partForm.category.trim().toUpperCase();
+  const normalizedPartPosition = partForm.position.trim().toUpperCase();
+  const matchedAdminParts = useMemo(() => {
+    if (!normalizedPartItemNumber) return [];
+    return parts.filter(
+      (part) => part.item_number === normalizedPartItemNumber && (!partForm.id || part.id !== partForm.id),
+    );
+  }, [normalizedPartItemNumber, partForm.id, parts]);
+  const adminChecklist = useMemo(
+    () => [
+      { label: "품목번호", done: Boolean(normalizedPartItemNumber) },
+      { label: "품명", done: Boolean(normalizedPartDesignation) },
+      { label: "현재 재고", done: partForm.currentStock.trim().length > 0 },
+      { label: "구분", done: Boolean(normalizedPartCategory) },
+      { label: "위치", done: Boolean(normalizedPartPosition) },
+    ],
+    [normalizedPartCategory, normalizedPartDesignation, normalizedPartItemNumber, normalizedPartPosition, partForm.currentStock],
+  );
+  const adminCompletedCount = adminChecklist.filter((item) => item.done).length;
+  const adminFormTone =
+    adminCompletedCount === adminChecklist.length ? "ready" : adminCompletedCount >= 3 ? "pending" : "idle";
+  const adminFormMessage =
+    adminCompletedCount === adminChecklist.length
+      ? partForm.id
+        ? "수정 저장 전에 입력값과 기존 품목 중복 여부를 확인하세요."
+        : "등록 준비가 거의 끝났습니다. 저장 전 미리보기를 확인하세요."
+      : `필수 입력 ${adminCompletedCount}/${adminChecklist.length} 완료. 남은 항목을 채우면 등록 실수를 줄일 수 있습니다.`;
 
   function stopScannerResources() {
     if (scannerCloseTimerRef.current) {
@@ -2676,162 +2705,232 @@ export default function ManagementPage() {
                   <span className="softBadge">위치 {locations.length}개</span>
                 </div>
               </div>
+              <div className={`selectionSummaryCard ${adminFormTone}`} style={{ marginBottom: 16 }}>
+                <div className="selectionSummaryHead">
+                  <div>
+                    <div className="meta">입력 진행 상태</div>
+                    <strong>{adminFormMessage}</strong>
+                  </div>
+                  <span className={`statusPill ${adminFormTone}`}>{adminCompletedCount}/{adminChecklist.length} 완료</span>
+                </div>
+                <div className="selectionMetaRow">
+                  {adminChecklist.map((item) => (
+                    <span key={item.label} className={`softBadge ${item.done ? "" : "warn"}`}>
+                      {item.done ? "완료" : "대기"} · {item.label}
+                    </span>
+                  ))}
+                </div>
+              </div>
               <form onSubmit={submitPart}>
-                <div className="formGrid formGridWide">
-                  <div className="formRow">
-                    <label className="label">품목번호</label>
-                    <input
-                      className="input"
-                      autoComplete="off"
-                      value={partForm.itemNumber}
-                      onChange={(e) => setPartForm((v) => ({ ...v, itemNumber: e.target.value.toUpperCase() }))}
-                      placeholder="item number"
-                    />
-                    <div className="actions" style={{ marginTop: 8 }}>
-                      <button className="btn secondary small" type="button" onClick={() => openScanner("part")}>
-                        바코드 스캔
-                      </button>
+                <div className="adminFormSections">
+                  <section className="adminFormSection">
+                    <div className="adminSectionHead">
+                      <h3>기본 정보</h3>
+                      <span className="meta">먼저 품목번호와 품명을 입력하세요.</span>
                     </div>
-                  </div>
-
-                  <div className="formRow">
-                    <label className="label">품명</label>
-                    <input className="input" autoComplete="off" value={partForm.designation} onChange={(e) => setPartForm((v) => ({ ...v, designation: e.target.value }))} placeholder="designation" />
-                  </div>
-
-                  <div className="formRow">
-                    <label className="label">메모</label>
-                    <input className="input" autoComplete="off" value={partForm.memo} onChange={(e) => setPartForm((v) => ({ ...v, memo: e.target.value }))} placeholder="비고 / 설명 메모" />
-                  </div>
-
-                  <div className="formRow">
-                    <label className="label">현재 재고</label>
-                    <input
-                      className="input"
-                      type="number"
-                      inputMode="decimal"
-                      autoComplete="off"
-                      step="0.01"
-                      value={partForm.currentStock}
-                      onChange={(e) => setPartForm((v) => ({ ...v, currentStock: e.target.value }))}
-                    />
-                  </div>
-
-                  <div className="formRow">
-                    <label className="label">B급 여부</label>
-                    <label className="checkRow">
-                      <input type="checkbox" checked={partForm.isBGrade} onChange={(e) => setPartForm((v) => ({ ...v, isBGrade: e.target.checked }))} />
-                      B급
-                    </label>
-                  </div>
-
-                  <div className="formRow">
-                    <label className="label">단위</label>
-                    <select className="select" value={partForm.unitOfQuantity} onChange={(e) => setPartForm((v) => ({ ...v, unitOfQuantity: e.target.value }))}>
-                      {UNIT_OPTIONS.map((unit) => (
-                        <option key={unit} value={unit}>
-                          {unit.toLowerCase()}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="formRow">
-                    <div className="inlineLabelRow">
-                      <label className="label">구분</label>
-                      <button className="btn secondary small" type="button" onClick={() => setCategoryOptionsOpen((value) => !value)}>
-                        목록
-                      </button>
-                    </div>
-                    <div
-                      className="autocompleteWrap"
-                      onBlur={() => window.setTimeout(() => setCategoryOptionsOpen(false), 100)}
-                    >
-                      <input
-                        className="input"
-                        autoComplete="off"
-                        value={partForm.category}
-                        onFocus={() => setCategoryOptionsOpen(true)}
-                        onChange={(e) => {
-                          setCategoryOptionsOpen(true);
-                          setPartForm((v) => ({ ...v, category: e.target.value.toUpperCase() }));
-                        }}
-                        placeholder="목록 선택 또는 직접입력"
-                      />
-                      {categoryOptionsOpen && categorySuggestions.length > 0 ? (
-                        <div className="autocompleteDropdown">
-                          {categorySuggestions.map((category) => (
-                            <button
-                              key={category.id}
-                              className={`autocompleteOption${category.name === partForm.category.trim().toUpperCase() ? " active" : ""}`}
-                              type="button"
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() => {
-                                setPartForm((v) => ({ ...v, category: category.name }));
-                                setCategoryOptionsOpen(false);
-                              }}
-                            >
-                              <span>{category.name}</span>
-                            </button>
-                          ))}
+                    <div className="formGrid formGridWide">
+                      <div className="formRow">
+                        <label className="label">품목번호</label>
+                        <input
+                          className="input"
+                          autoComplete="off"
+                          value={partForm.itemNumber}
+                          onChange={(e) => setPartForm((v) => ({ ...v, itemNumber: e.target.value.toUpperCase() }))}
+                          placeholder="item number"
+                        />
+                        <div className="actions" style={{ marginTop: 8 }}>
+                          <button className="btn secondary small" type="button" onClick={() => openScanner("part")}>
+                            바코드 스캔
+                          </button>
                         </div>
-                      ) : null}
-                    </div>
-                  </div>
+                        {matchedAdminParts.length > 0 ? (
+                          <div className="fieldHint pending">
+                            같은 품목번호가 이미 {matchedAdminParts.length}건 등록되어 있습니다. 아래 후보를 확인해 주세요.
+                          </div>
+                        ) : null}
+                      </div>
 
-                  <div className="formRow">
-                    <div className="inlineLabelRow">
-                      <label className="label">파트 위치</label>
-                      <button className="btn secondary small" type="button" onClick={() => setLocationOptionsOpen((value) => !value)}>
-                        목록
-                      </button>
+                      <div className="formRow">
+                        <label className="label">품명</label>
+                        <input
+                          className="input"
+                          autoComplete="off"
+                          value={partForm.designation}
+                          onChange={(e) => setPartForm((v) => ({ ...v, designation: e.target.value }))}
+                          placeholder="designation"
+                        />
+                      </div>
+
+                      <div className="formRow">
+                        <label className="label">메모</label>
+                        <input className="input" autoComplete="off" value={partForm.memo} onChange={(e) => setPartForm((v) => ({ ...v, memo: e.target.value }))} placeholder="비고 / 설명 메모" />
+                      </div>
                     </div>
-                    <div
-                      className="autocompleteWrap"
-                      onBlur={() => window.setTimeout(() => setLocationOptionsOpen(false), 100)}
-                    >
-                      <input
-                        className="input"
-                        autoComplete="off"
-                        value={partForm.position}
-                        onFocus={() => setLocationOptionsOpen(true)}
-                        onChange={(e) => {
-                          setLocationOptionsOpen(true);
-                          setPartForm((v) => ({ ...v, position: e.target.value.toUpperCase() }));
-                        }}
-                        placeholder="목록 선택 또는 직접입력"
-                      />
-                      {locationOptionsOpen && locationSuggestions.length > 0 ? (
-                        <div className="autocompleteDropdown">
-                          {locationSuggestions.map((location) => (
-                            <button
-                              key={location.id}
-                              className={`autocompleteOption${location.code === partForm.position.trim().toUpperCase() ? " active" : ""}`}
-                              type="button"
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() => {
-                                setPartForm((v) => ({ ...v, position: location.code }));
-                                setLocationOptionsOpen(false);
-                              }}
-                            >
-                              <span>{location.code}</span>
-                              <span className="meta">{location.description || "설명 없음"}</span>
-                            </button>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                    {partForm.position.trim() ? (
-                      selectedLocationInfo ? (
-                        <div className="locationFieldHint">
-                          <span className="softBadge">{selectedLocationInfo.code}</span>
-                          <span className="meta">{selectedLocationInfo.description || "설명 없음"}</span>
-                        </div>
-                      ) : (
-                        <div className="meta">등록된 위치 설명이 없는 직접입력 코드입니다.</div>
-                      )
+                    {matchedAdminParts.length > 0 ? (
+                      <div className="candidateList">
+                        {matchedAdminParts.slice(0, 4).map((part) => (
+                          <button key={part.id} className="candidateItem" type="button" onClick={() => editPart(part)}>
+                            <strong>{part.item_number}</strong>
+                            <span>{part.designation}</span>
+                            <span className="meta">구분 {part.location || "-"} / 위치 {part.position || "-"} / 재고 {part.current_stock}</span>
+                          </button>
+                        ))}
+                      </div>
                     ) : null}
-                  </div>
+                  </section>
+
+                  <section className="adminFormSection">
+                    <div className="adminSectionHead">
+                      <h3>재고 정보</h3>
+                      <span className="meta">초기 재고, 단위, 등급을 정합니다.</span>
+                    </div>
+                    <div className="formGrid formGridWide">
+                      <div className="formRow">
+                        <label className="label">현재 재고</label>
+                        <input
+                          className="input"
+                          type="number"
+                          inputMode="decimal"
+                          autoComplete="off"
+                          step="0.01"
+                          value={partForm.currentStock}
+                          onChange={(e) => setPartForm((v) => ({ ...v, currentStock: e.target.value }))}
+                        />
+                      </div>
+
+                      <div className="formRow">
+                        <label className="label">단위</label>
+                        <select className="select" value={partForm.unitOfQuantity} onChange={(e) => setPartForm((v) => ({ ...v, unitOfQuantity: e.target.value }))}>
+                          {UNIT_OPTIONS.map((unit) => (
+                            <option key={unit} value={unit}>
+                              {unit.toLowerCase()}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="formRow">
+                        <label className="label">B급 여부</label>
+                        <label className="checkRow">
+                          <input type="checkbox" checked={partForm.isBGrade} onChange={(e) => setPartForm((v) => ({ ...v, isBGrade: e.target.checked }))} />
+                          B급
+                        </label>
+                        <div className="meta">초기 등록 자체를 B급 품목으로 시작해야 할 때만 체크하세요.</div>
+                      </div>
+
+                      <div className="formRow">
+                        <label className="label">적용 최소재고</label>
+                        <div className="panelNotice">
+                          현재 저장 기준은 전 제품 공통 최소재고 <strong>{globalMinimumStock || "0"}</strong> 입니다.
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="adminFormSection">
+                    <div className="adminSectionHead">
+                      <h3>구분 및 위치</h3>
+                      <span className="meta">목록 선택 또는 직접 입력 후, 필요하면 기준정보 관리를 여세요.</span>
+                    </div>
+                    <div className="formGrid formGridWide">
+                      <div className="formRow">
+                        <div className="inlineLabelRow">
+                          <label className="label">구분</label>
+                          <button className="btn secondary small" type="button" onClick={() => setCategoryOptionsOpen((value) => !value)}>
+                            목록
+                          </button>
+                        </div>
+                        <div
+                          className="autocompleteWrap"
+                          onBlur={() => window.setTimeout(() => setCategoryOptionsOpen(false), 100)}
+                        >
+                          <input
+                            className="input"
+                            autoComplete="off"
+                            value={partForm.category}
+                            onFocus={() => setCategoryOptionsOpen(true)}
+                            onChange={(e) => {
+                              setCategoryOptionsOpen(true);
+                              setPartForm((v) => ({ ...v, category: e.target.value.toUpperCase() }));
+                            }}
+                            placeholder="목록 선택 또는 직접입력"
+                          />
+                          {categoryOptionsOpen && categorySuggestions.length > 0 ? (
+                            <div className="autocompleteDropdown">
+                              {categorySuggestions.map((category) => (
+                                <button
+                                  key={category.id}
+                                  className={`autocompleteOption${category.name === partForm.category.trim().toUpperCase() ? " active" : ""}`}
+                                  type="button"
+                                  onMouseDown={(e) => e.preventDefault()}
+                                  onClick={() => {
+                                    setPartForm((v) => ({ ...v, category: category.name }));
+                                    setCategoryOptionsOpen(false);
+                                  }}
+                                >
+                                  <span>{category.name}</span>
+                                </button>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <div className="formRow">
+                        <div className="inlineLabelRow">
+                          <label className="label">파트 위치</label>
+                          <button className="btn secondary small" type="button" onClick={() => setLocationOptionsOpen((value) => !value)}>
+                            목록
+                          </button>
+                        </div>
+                        <div
+                          className="autocompleteWrap"
+                          onBlur={() => window.setTimeout(() => setLocationOptionsOpen(false), 100)}
+                        >
+                          <input
+                            className="input"
+                            autoComplete="off"
+                            value={partForm.position}
+                            onFocus={() => setLocationOptionsOpen(true)}
+                            onChange={(e) => {
+                              setLocationOptionsOpen(true);
+                              setPartForm((v) => ({ ...v, position: e.target.value.toUpperCase() }));
+                            }}
+                            placeholder="목록 선택 또는 직접입력"
+                          />
+                          {locationOptionsOpen && locationSuggestions.length > 0 ? (
+                            <div className="autocompleteDropdown">
+                              {locationSuggestions.map((location) => (
+                                <button
+                                  key={location.id}
+                                  className={`autocompleteOption${location.code === partForm.position.trim().toUpperCase() ? " active" : ""}`}
+                                  type="button"
+                                  onMouseDown={(e) => e.preventDefault()}
+                                  onClick={() => {
+                                    setPartForm((v) => ({ ...v, position: location.code }));
+                                    setLocationOptionsOpen(false);
+                                  }}
+                                >
+                                  <span>{location.code}</span>
+                                  <span className="meta">{location.description || "설명 없음"}</span>
+                                </button>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                        {partForm.position.trim() ? (
+                          selectedLocationInfo ? (
+                            <div className="locationFieldHint">
+                              <span className="softBadge">{selectedLocationInfo.code}</span>
+                              <span className="meta">{selectedLocationInfo.description || "설명 없음"}</span>
+                            </div>
+                          ) : (
+                            <div className="meta">등록된 위치 설명이 없는 직접입력 코드입니다.</div>
+                          )
+                        ) : null}
+                      </div>
+                    </div>
+                  </section>
                 </div>
 
                 <div className={`actions ${isMobileLayout ? "stickyActionBar" : ""}`}>
@@ -2846,6 +2945,47 @@ export default function ManagementPage() {
             </section>
 
             <section className="panel adminSidePanel">
+              <div className="adminBlock">
+                <div className="adminSectionHead" style={{ marginBottom: 10 }}>
+                  <h3>등록 미리보기</h3>
+                  <span className={`statusPill ${adminFormTone}`}>{partForm.id ? "수정 모드" : "신규 등록"}</span>
+                </div>
+                <div className="historyMiniList">
+                  <div className="historyMiniItem">
+                    <div className="meta">품목</div>
+                    <strong>{normalizedPartItemNumber || "품목번호 입력 전"}{normalizedPartDesignation ? ` / ${normalizedPartDesignation}` : ""}</strong>
+                  </div>
+                  <div className="historyMiniItem">
+                    <div className="meta">구분 / 위치</div>
+                    <strong>{normalizedPartCategory || "-" } / {normalizedPartPosition || "-"}</strong>
+                  </div>
+                  <div className="historyMiniItem">
+                    <div className="meta">재고 / 단위 / 등급</div>
+                    <strong>{partForm.currentStock || "0"} / {partForm.unitOfQuantity} / {partForm.isBGrade ? "B급" : "정상품"}</strong>
+                  </div>
+                </div>
+              </div>
+
+              <div className="adminBlock">
+                <div className="adminSectionHead" style={{ marginBottom: 10 }}>
+                  <h3>빠른 점검</h3>
+                  <span className="meta">저장 전 확인</span>
+                </div>
+                <div className="adminChecklist">
+                  {adminChecklist.map((item) => (
+                    <div key={item.label} className={`adminChecklistItem ${item.done ? "done" : ""}`}>
+                      <span>{item.label}</span>
+                      <strong>{item.done ? "완료" : "대기"}</strong>
+                    </div>
+                  ))}
+                </div>
+                {matchedAdminParts.length > 0 ? (
+                  <div className="fieldHint pending" style={{ marginTop: 10 }}>
+                    같은 품목번호가 이미 등록되어 있어 신규 등록보다 수정이 더 적절할 수 있습니다.
+                  </div>
+                ) : null}
+              </div>
+
               <div className="adminBlock">
                 <div className="formRow" style={{ marginBottom: 14 }}>
                   <label className="label">global minimum stock (전 제품 공통)</label>
@@ -2864,6 +3004,22 @@ export default function ManagementPage() {
                       기준 저장
                     </button>
                   </div>
+                  <div className="meta">현재 품종 등록 시 이 기준값이 최소재고로 적용됩니다.</div>
+                </div>
+              </div>
+
+              <div className="adminBlock">
+                <div className="adminSectionHead" style={{ marginBottom: 10 }}>
+                  <h3>기준정보 바로가기</h3>
+                  <span className="meta">입력 중 필요한 경우</span>
+                </div>
+                <div className="actions">
+                  <button className="btn secondary small" type="button" onClick={openCategoryManager}>
+                    구분 관리 열기
+                  </button>
+                  <button className="btn secondary small" type="button" onClick={openLocationManager}>
+                    위치 관리 열기
+                  </button>
                 </div>
               </div>
             </section>

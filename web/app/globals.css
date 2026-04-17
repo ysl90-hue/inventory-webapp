@@ -428,6 +428,31 @@ a {
   margin-bottom: 18px;
 }
 
+.adminFormSections {
+  display: grid;
+  gap: 14px;
+}
+
+.adminFormSection {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px;
+  background: rgba(255, 253, 250, 0.72);
+}
+
+.adminSectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.adminSectionHead h3 {
+  margin: 0;
+  font-size: 0.98rem;
+}
+
 .subtleNote {
   margin: 6px 0 0;
   color: var(--muted);
@@ -842,6 +867,29 @@ th {
   margin-bottom: 12px;
 }
 
+.adminChecklist {
+  display: grid;
+  gap: 8px;
+}
+
+.adminChecklistItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(255, 253, 250, 0.82);
+  color: var(--muted);
+}
+
+.adminChecklistItem.done {
+  border-color: #b9e3c8;
+  background: rgba(232, 247, 239, 0.65);
+  color: #166534;
+}
+
 .txBadge {
   display: inline-flex;
   align-items: center;
@@ -1188,7 +1236,9 @@ th {
   .inlineLabelRow,
   .manageRow,
   .selectionSummaryHead,
-  .historyMiniHead {
+  .historyMiniHead,
+  .adminSectionHead,
+  .adminChecklistItem {
     align-items: stretch;
     flex-direction: column;
   }
