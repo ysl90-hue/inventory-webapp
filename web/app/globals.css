@@ -988,14 +988,19 @@ th {
 }
 
 .releaseModal {
-  width: min(760px, calc(100vw - 32px));
-  max-height: 88vh;
+  width: min(720px, calc(100vw - 64px));
+  max-height: min(82vh, 760px);
   overflow: auto;
   border-radius: 18px;
+  border: 1px solid #d8d2c5;
+  background: rgba(255, 252, 247, 0.99);
+  box-shadow:
+    0 28px 60px rgba(0, 0, 0, 0.24),
+    0 8px 20px rgba(0, 0, 0, 0.08);
 }
 
 .releaseOverlay {
-  padding: 16px;
+  padding: 32px 16px;
   align-items: center;
 }
 
@@ -1301,7 +1306,7 @@ th {
   }
 
   .releaseModal {
-    width: min(760px, calc(100vw - 32px));
+    width: min(720px, calc(100vw - 24px));
     border-radius: 18px;
     border-bottom: 1px solid var(--line);
     max-height: min(88svh, 760px);

@@ -5,9 +5,18 @@ export type ReleaseNote = {
   items: string[];
 };
 
-export const APP_VERSION = "v1.2.1";
+export const APP_VERSION = "v1.2.2";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
+  {
+    version: "v1.2.2",
+    date: "2026-04-17",
+    summary: "업데이트 내역 창을 더 분명한 전면 팝업 형태로 다듬었습니다.",
+    items: [
+      "업데이트 내역 창이 화면 앞에 뜨는 팝업처럼 보이도록 크기와 그림자를 조정했습니다.",
+      "팝업 바깥 배경을 눌렀을 때만 닫히고, 팝업 내용 영역을 눌러도 닫히지 않도록 수정했습니다.",
+    ],
+  },
   {
     version: "v1.2.1",
     date: "2026-04-17",

@@ -38,9 +38,13 @@ export function VersionHistory({ compact = false }: VersionHistoryProps) {
           role="dialog"
           aria-modal="true"
           aria-label="업데이트 내역"
-          onClick={() => setOpen(false)}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setOpen(false);
+            }
+          }}
         >
-          <div className="scannerModal releaseModal" onClick={(event) => event.stopPropagation()}>
+          <div className="scannerModal releaseModal">
             <div className="adminHeaderRow" style={{ marginBottom: 8 }}>
               <div>
                 <h2 style={{ margin: 0 }}>업데이트 내역</h2>
