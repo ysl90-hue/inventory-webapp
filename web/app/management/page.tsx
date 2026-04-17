@@ -2731,14 +2731,14 @@ export default function ManagementPage() {
                     <div className="formGrid formGridWide">
                       <div className="formRow">
                         <label className="label">품목번호</label>
-                        <input
-                          className="input"
-                          autoComplete="off"
-                          value={partForm.itemNumber}
-                          onChange={(e) => setPartForm((v) => ({ ...v, itemNumber: e.target.value.toUpperCase() }))}
-                          placeholder="item number"
-                        />
-                        <div className="actions" style={{ marginTop: 8 }}>
+                        <div className="inlineFieldRow">
+                          <input
+                            className="input"
+                            autoComplete="off"
+                            value={partForm.itemNumber}
+                            onChange={(e) => setPartForm((v) => ({ ...v, itemNumber: e.target.value.toUpperCase() }))}
+                            placeholder="item number"
+                          />
                           <button className="btn secondary small" type="button" onClick={() => openScanner("part")}>
                             바코드 스캔
                           </button>
