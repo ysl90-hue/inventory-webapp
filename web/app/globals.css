@@ -131,6 +131,21 @@ a {
   background: rgba(255, 253, 250, 0.72);
 }
 
+.mobileQuickPanel {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid #d9efe7;
+  background: rgba(217, 239, 231, 0.32);
+}
+
+.mobileQuickMeta {
+  display: grid;
+  gap: 4px;
+}
+
 .modalToolbar {
   display: grid;
   grid-template-columns: 150px minmax(0, 1fr) 180px;
@@ -1239,6 +1254,11 @@ th {
     grid-template-columns: 1fr;
   }
 
+  .mobileQuickPanel .quickActionRow {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .toolbarActions {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -1343,6 +1363,11 @@ th {
   .releaseHead {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .historyCards .actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
 
   .selectionStatsGrid,

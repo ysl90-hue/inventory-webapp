@@ -5,9 +5,19 @@ export type ReleaseNote = {
   items: string[];
 };
 
-export const APP_VERSION = "v1.2.2";
+export const APP_VERSION = "v1.3.0";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
+  {
+    version: "v1.3.0",
+    date: "2026-04-17",
+    summary: "최근 이력 확인성과 모바일 현장 작업 흐름을 개선했습니다.",
+    items: [
+      "최근 이력에 입고, 사용, 보정 필터와 선택 품목만 보기 기능을 추가했습니다.",
+      "오늘 처리 건수와 입고/사용 수량 요약을 확인할 수 있도록 정리했습니다.",
+      "모바일 입출고 화면에 빠른 작업 패널과 자동 스크롤 흐름을 추가했습니다.",
+    ],
+  },
   {
     version: "v1.2.2",
     date: "2026-04-17",
