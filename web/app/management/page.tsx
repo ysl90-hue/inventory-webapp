@@ -1315,7 +1315,13 @@ export default function ManagementPage() {
 
     async function checkVersion() {
       try {
-        const res = await fetch(`/api/app-version?ts=${Date.now()}`, { cache: "no-store" });
+        const res = await fetch(`/api/app-version?ts=${Date.now()}`, {
+          cache: "no-store",
+          headers: {
+            "Cache-Control": "no-cache",
+            Pragma: "no-cache",
+          },
+        });
         const json = (await res.json()) as { version?: string };
         if (cancelled || !json.version) return;
         if (json.version !== seenVersionRef.current) {
@@ -1329,11 +1335,26 @@ export default function ManagementPage() {
     void checkVersion();
     const timer = window.setInterval(() => {
       void checkVersion();
-    }, 60000);
+    }, 15000);
+
+    function handleVisibilityCheck() {
+      if (document.visibilityState === "visible") {
+        void checkVersion();
+      }
+    }
+
+    function handleFocusCheck() {
+      void checkVersion();
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityCheck);
+    window.addEventListener("focus", handleFocusCheck);
 
     return () => {
       cancelled = true;
       window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", handleVisibilityCheck);
+      window.removeEventListener("focus", handleFocusCheck);
     };
   }, []);
 
