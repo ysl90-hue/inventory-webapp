@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { APP_VERSION, RELEASE_NOTES } from "@/lib/app-version";
+import { APP_VERSION, RELEASE_NOTES, RELEASE_NOTES_FORCE_OPEN_KEY } from "@/lib/app-version";
 
 type VersionHistoryProps = {
   compact?: boolean;
@@ -34,6 +34,11 @@ export function VersionHistory({
     if (!mounted || !autoOpenOnMount) return;
 
     try {
+      const forcedVersion = window.localStorage.getItem(RELEASE_NOTES_FORCE_OPEN_KEY);
+      if (forcedVersion === APP_VERSION) {
+        setOpen(true);
+        return;
+      }
       const dismissedDate = window.localStorage.getItem(RELEASE_NOTES_DISMISS_KEY);
       if (dismissedDate === getTodayKey()) return;
     } catch {
@@ -48,7 +53,7 @@ export function VersionHistory({
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setOpen(false);
+        closeModal();
       }
     };
 
@@ -59,6 +64,16 @@ export function VersionHistory({
   function dismissForToday() {
     try {
       window.localStorage.setItem(RELEASE_NOTES_DISMISS_KEY, getTodayKey());
+      window.localStorage.removeItem(RELEASE_NOTES_FORCE_OPEN_KEY);
+    } catch {
+      // ignore localStorage errors
+    }
+    setOpen(false);
+  }
+
+  function closeModal() {
+    try {
+      window.localStorage.removeItem(RELEASE_NOTES_FORCE_OPEN_KEY);
     } catch {
       // ignore localStorage errors
     }
@@ -85,7 +100,7 @@ export function VersionHistory({
               aria-label="업데이트 내역"
               onMouseDown={(event) => {
                 if (event.target === event.currentTarget) {
-                  setOpen(false);
+                  closeModal();
                 }
               }}
             >
@@ -101,7 +116,7 @@ export function VersionHistory({
                     <button className="btn secondary small" type="button" onClick={dismissForToday}>
                       오늘은 보지 않기
                     </button>
-                    <button className="btn secondary small" type="button" onClick={() => setOpen(false)}>
+                    <button className="btn secondary small" type="button" onClick={closeModal}>
                       닫기
                     </button>
                   </div>

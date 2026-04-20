@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { VersionHistory } from "@/components/version-history";
-import { APP_VERSION } from "@/lib/app-version";
+import { APP_VERSION, RELEASE_NOTES_FORCE_OPEN_KEY } from "@/lib/app-version";
 import { canUseCurrentSession, clearCurrentSessionMarker, getShouldKeepLogin } from "@/lib/auth-session";
 import { normalizeCategory, normalizeUnit, UNIT_OPTIONS } from "@/lib/inventory";
 import type { Part, PartCategory, PartLocation, StockTransaction } from "@/lib/types";
@@ -2079,7 +2079,18 @@ export default function ManagementPage() {
               <button className="btn secondary small" type="button" onClick={() => setVersionNotice(null)}>
                 나중에
               </button>
-              <button className="btn small" type="button" onClick={() => window.location.reload()}>
+              <button
+                className="btn small"
+                type="button"
+                onClick={() => {
+                  try {
+                    window.localStorage.setItem(RELEASE_NOTES_FORCE_OPEN_KEY, versionNotice.version);
+                  } catch {
+                    // ignore localStorage errors
+                  }
+                  window.location.reload();
+                }}
+              >
                 새로고침
               </button>
             </div>

@@ -5,9 +5,18 @@ export type ReleaseNote = {
   items: string[];
 };
 
-export const APP_VERSION = "v1.5.1";
+export const RELEASE_NOTES_FORCE_OPEN_KEY = "inventory_release_notes_force_open_version";
+export const APP_VERSION = "v1.5.2";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
+  {
+    version: "v1.5.2",
+    date: "2026-04-21",
+    summary: "새 버전 감지 후 새로고침과 업데이트 내역 확인 흐름을 더 자연스럽게 연결했습니다.",
+    items: [
+      "새 버전 알림에서 새로고침을 누르면 최신 화면으로 이동한 뒤 업데이트 내역 팝업이 자동으로 열리도록 반영했습니다.",
+    ],
+  },
   {
     version: "v1.5.0",
     date: "2026-04-21",
