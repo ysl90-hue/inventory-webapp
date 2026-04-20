@@ -5,9 +5,19 @@ export type ReleaseNote = {
   items: string[];
 };
 
-export const APP_VERSION = "v1.4.0";
+export const APP_VERSION = "v1.5.0";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
+  {
+    version: "v1.5.0",
+    date: "2026-04-21",
+    summary: "부족 재고 확인, 기준정보 관리, 버전 반영 안내 흐름을 더 분명하게 정리했습니다.",
+    items: [
+      "상단 부족 재고 수치를 누르면 부족한 품목만 모아보는 팝업이 열리고, 바로 입고/사용/이력 확인이 가능해졌습니다.",
+      "입고 등록된 품목 수치를 눌러 전체 품목 팝업을 열 수 있도록 바꾸고, 품종등록의 구분/위치 관리는 기준정보 바로가기 영역으로 통합했습니다.",
+      "이미 열려 있는 화면에서도 새 버전이 감지되면 새로고침 안내가 표시되도록 반영했습니다.",
+    ],
+  },
   {
     version: "v1.4.0",
     date: "2026-04-17",

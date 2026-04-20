@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { VersionHistory } from "@/components/version-history";
+import { APP_VERSION } from "@/lib/app-version";
 import { canUseCurrentSession, clearCurrentSessionMarker, getShouldKeepLogin } from "@/lib/auth-session";
 import { normalizeCategory, normalizeUnit, UNIT_OPTIONS } from "@/lib/inventory";
 import type { Part, PartCategory, PartLocation, StockTransaction } from "@/lib/types";
@@ -118,7 +119,7 @@ const HELP_SECTIONS = [
     items: [
       "검색: 등록된 품목을 조건별로 검색하고 재고, 메모, 위치를 확인하는 화면입니다.",
       "입고/사용처리: 선택한 품목을 기준으로 입고 또는 사용을 저장하는 화면입니다.",
-      "입고 등록 파트: 품종등록된 전체 품목을 팝업으로 확인하고 검색하거나 정렬하는 기능입니다.",
+      "상단 입고 등록된 품목 수치를 누르면 품종등록된 전체 품목을 팝업으로 확인하고 검색하거나 정렬할 수 있습니다.",
       "품종등록: 신규 품목 등록, 기존 품목 수정, 구분 관리, 위치 관리를 진행하는 화면입니다.",
     ],
   },
@@ -172,6 +173,7 @@ const HELP_SECTIONS = [
       "품종등록에서는 품목번호, 품명, 메모, 현재 재고, 단위, 구분, 파트 위치, B급 여부를 관리합니다.",
       "구분과 파트 위치는 목록 버튼으로 선택할 수 있고, 직접 입력도 가능합니다.",
       "파트 위치 목록에서는 위치코드와 설명이 함께 표시되며, 선택 후에는 설명이 입력창 아래에 나타납니다.",
+      "기준정보 바로가기에서는 구분 수와 위치 수를 함께 보면서 구분 관리와 위치 관리를 열 수 있습니다.",
       "구분 관리 팝업에서는 구분 추가, 수정, 삭제가 가능합니다.",
       "위치 관리 팝업에서는 위치코드, 설명, 사진 추가/수정/삭제가 가능합니다.",
       "입고 등록 파트 팝업의 수정 버튼을 누르면 팝업이 닫히고 품종등록 화면으로 이동합니다.",
@@ -341,9 +343,11 @@ export default function ManagementPage() {
   const [successToast, setSuccessToast] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>("search");
   const [stockModalOpen, setStockModalOpen] = useState(false);
+  const [lowStockModalOpen, setLowStockModalOpen] = useState(false);
   const [stockModalSearch, setStockModalSearch] = useState("");
   const [stockModalSearchField, setStockModalSearchField] = useState<PartSearchField>("all");
   const [stockModalSort, setStockModalSort] = useState<"category" | "item" | "designation" | "stockDesc" | "stockAsc">("category");
+  const [versionNotice, setVersionNotice] = useState<{ version: string } | null>(null);
 
   const [txForm, setTxForm] = useState<TxForm>(createEmptyTxForm);
   const [partForm, setPartForm] = useState<PartForm>(EMPTY_PART_FORM);
@@ -394,6 +398,7 @@ export default function ManagementPage() {
   const scannerPendingValueRef = useRef<string | null>(null);
   const locationFileInputRef = useRef<HTMLInputElement | null>(null);
   const stockSectionRef = useRef<HTMLElement | null>(null);
+  const seenVersionRef = useRef(APP_VERSION);
 
   const isAdmin = authRole === "admin";
   const deferredSearchInput = useDeferredValue(searchInput);
@@ -1212,6 +1217,13 @@ export default function ManagementPage() {
   }, [txHistory]);
 
   const lowCount = parts.filter((part) => isPartLow(part, minimumStockValue)).length;
+  const lowStockParts = useMemo(
+    () =>
+      [...parts]
+        .filter((part) => isPartLow(part, minimumStockValue))
+        .sort((a, b) => Number(a.current_stock) - Number(b.current_stock) || a.item_number.localeCompare(b.item_number)),
+    [minimumStockValue, parts],
+  );
   const inboundRegisteredCount = inboundParts.length;
   const matchedTxParts = useMemo(() => {
     const normalized = txForm.itemNumber.trim().toUpperCase();
@@ -1293,6 +1305,37 @@ export default function ManagementPage() {
     }, 80);
     return () => window.clearTimeout(timer);
   }, [activeTab, isMobileLayout, selectedPart?.id]);
+
+  useEffect(() => {
+    seenVersionRef.current = APP_VERSION;
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function checkVersion() {
+      try {
+        const res = await fetch(`/api/app-version?ts=${Date.now()}`, { cache: "no-store" });
+        const json = (await res.json()) as { version?: string };
+        if (cancelled || !json.version) return;
+        if (json.version !== seenVersionRef.current) {
+          setVersionNotice({ version: json.version });
+        }
+      } catch {
+        // ignore version polling errors
+      }
+    }
+
+    void checkVersion();
+    const timer = window.setInterval(() => {
+      void checkVersion();
+    }, 60000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, []);
 
   function submitSearch() {
     setSearch(searchInput.trim());
@@ -1577,6 +1620,8 @@ export default function ManagementPage() {
   }
 
   function handleSearchQuickAction(part: Part, txType: "IN" | "OUT") {
+    setStockModalOpen(false);
+    setLowStockModalOpen(false);
     chooseTxPart(part, txType);
   }
 
@@ -1988,19 +2033,38 @@ export default function ManagementPage() {
       </header>
 
       <section className="statsGrid" aria-label="요약 정보">
-        <div className="statCard">
+        <button className="statCard statCardButton" type="button" onClick={() => setStockModalOpen(true)}>
           <div className="meta">입고 등록된 품목</div>
           <div className="statValue">{inboundRegisteredCount}</div>
-        </div>
-        <div className="statCard">
+        </button>
+        <button className="statCard statCardButton" type="button" onClick={() => setLowStockModalOpen(true)}>
           <div className="meta">부족 재고</div>
           <div className={`statValue ${lowCount > 0 ? "low" : ""}`}>{lowCount}</div>
-        </div>
+        </button>
         <div className="statCard">
           <div className="meta">레이아웃</div>
           <div className="statValue">{isMobileLayout ? "Mobile" : "Desktop"}</div>
         </div>
       </section>
+
+      {versionNotice ? (
+        <section className="panel versionAlertPanel" style={{ marginBottom: 14 }}>
+          <div className="adminHeaderRow" style={{ marginBottom: 0 }}>
+            <div>
+              <strong>새 버전 {versionNotice.version} 이 준비되었습니다.</strong>
+              <div className="meta">현재 열려 있는 화면은 이전 버전일 수 있습니다. 새로고침하면 최신 변경사항을 바로 반영할 수 있습니다.</div>
+            </div>
+            <div className="actions">
+              <button className="btn secondary small" type="button" onClick={() => setVersionNotice(null)}>
+                나중에
+              </button>
+              <button className="btn small" type="button" onClick={() => window.location.reload()}>
+                새로고침
+              </button>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       <section className="panel" style={{ marginBottom: 14 }}>
         <div className="authRow" style={{ justifyContent: "space-between" }}>
@@ -2031,9 +2095,6 @@ export default function ManagementPage() {
           </button>
           <button className={`tabButton ${activeTab === "stock" ? "active" : ""}`} type="button" onClick={() => setActiveTab("stock")}>
             입고/사용처리
-          </button>
-          <button className="tabButton" type="button" onClick={() => setStockModalOpen(true)}>
-            입고 등록 파트
           </button>
           <button className={`tabButton ${activeTab === "admin" ? "active" : ""}`} type="button" onClick={() => setActiveTab("admin")}>
             품종등록
@@ -2919,6 +2980,124 @@ export default function ManagementPage() {
         </div>
       ) : null}
 
+      {lowStockModalOpen ? (
+        <div className="scannerOverlay" role="dialog" aria-modal="true" aria-label="부족 재고 품목 보기">
+          <div className="scannerModal stockModal">
+            <div className="adminHeaderRow" style={{ marginBottom: 8 }}>
+              <div>
+                <h2 style={{ margin: 0 }}>부족 재고 품목</h2>
+                <div className="meta">현재 최소재고 기준 {minimumStockLabel || "0"} 이하인 품목만 모아봤습니다.</div>
+              </div>
+              <div className="actions">
+                <div className="meta">{lowStockParts.length}건</div>
+                <button className="btn secondary small" type="button" onClick={() => setLowStockModalOpen(false)}>
+                  닫기
+                </button>
+              </div>
+            </div>
+            {isMobileLayout ? (
+              <div className="partsCards">
+                {lowStockParts.map((part) => {
+                  const locationInfo = locationsByCode.get((part.position || "").toUpperCase());
+                  return (
+                    <article key={part.id} className="dataCard">
+                      <div className="dataCardHead">
+                        <strong>{part.location || "구분 없음"}</strong>
+                        <span className="softBadge warn">부족 재고</span>
+                      </div>
+                      <div>{part.item_number}</div>
+                      <div>{part.designation}</div>
+                      <div className="badgeRow">
+                        <span className="softBadge warn">현재 {formatSplitStock(part)}</span>
+                        <span className="softBadge">기준 {minimumStockLabel || part.minimum_stock || "0"}</span>
+                      </div>
+                      <div className="kvGrid">
+                        <div>
+                          <span className="meta">위치</span>
+                          <div>
+                            <LocationPreview position={part.position} description={locationInfo?.description} imageUrl={locationInfo?.image_url} />
+                          </div>
+                        </div>
+                        <div>
+                          <span className="meta">단위</span>
+                          <div>{part.unit_of_quantity || "-"}</div>
+                        </div>
+                      </div>
+                      <div className="quickActionRow" style={{ marginTop: 10 }}>
+                        <button className="btn small" type="button" onClick={() => handleSearchQuickAction(part, "IN")}>
+                          입고
+                        </button>
+                        <button className="btn danger small" type="button" onClick={() => handleSearchQuickAction(part, "OUT")}>
+                          사용
+                        </button>
+                        <button className="btn secondary small" type="button" onClick={() => openPartHistory(part)}>
+                          이력
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+                {!loading && lowStockParts.length === 0 ? <div className="panelNotice">현재 부족 재고 품목이 없습니다.</div> : null}
+              </div>
+            ) : (
+              <div className="historyWrap stockHistoryWrap">
+                <table className="historyTable">
+                  <thead>
+                    <tr>
+                      <th>구분</th>
+                      <th>품목번호</th>
+                      <th>품명</th>
+                      <th>현재 재고</th>
+                      <th>기준 재고</th>
+                      <th>위치</th>
+                      <th>빠른 작업</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lowStockParts.map((part) => {
+                      const locationInfo = locationsByCode.get((part.position || "").toUpperCase());
+                      return (
+                        <tr key={part.id}>
+                          <td>{part.location || "-"}</td>
+                          <td>{part.item_number}</td>
+                          <td>
+                            <div>{part.designation}</div>
+                            {part.spare_parts_identifier ? <div className="meta partMemo">{part.spare_parts_identifier}</div> : null}
+                          </td>
+                          <td className="low">{formatSplitStock(part)}</td>
+                          <td>{minimumStockLabel || part.minimum_stock || "0"}</td>
+                          <td>
+                            <LocationPreview position={part.position} description={locationInfo?.description} imageUrl={locationInfo?.image_url} />
+                          </td>
+                          <td>
+                            <div className="actions">
+                              <button className="btn small" type="button" onClick={() => handleSearchQuickAction(part, "IN")}>
+                                입고
+                              </button>
+                              <button className="btn danger small" type="button" onClick={() => handleSearchQuickAction(part, "OUT")}>
+                                사용
+                              </button>
+                              <button className="btn secondary small" type="button" onClick={() => openPartHistory(part)}>
+                                이력
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {!loading && lowStockParts.length === 0 ? (
+                      <tr>
+                        <td colSpan={7}>현재 부족 재고 품목이 없습니다.</td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
+
       {activeTab === "admin" ? (
         isAdmin ? (
           <div className="grid adminLayout">
@@ -2927,18 +3106,6 @@ export default function ManagementPage() {
                 <div>
                   <h2>{partForm.id ? "품종 수정" : "품종 등록"}</h2>
                   <p className="subtleNote">주요 등록 항목을 한 곳에서 바로 입력하고, 필요할 때만 구분/위치 관리를 열 수 있습니다.</p>
-                </div>
-                <div className="actions">
-                  <button className="btn secondary" type="button" onClick={openCategoryManager}>
-                    구분 관리
-                  </button>
-                  <button className="btn secondary" type="button" onClick={openLocationManager}>
-                    위치 관리
-                  </button>
-                </div>
-                <div className="categoryChips">
-                  <span className="softBadge">구분 {categories.length}개</span>
-                  <span className="softBadge">위치 {locations.length}개</span>
                 </div>
               </div>
               <div className={`selectionSummaryCard ${adminFormTone}`} style={{ marginBottom: 16 }}>
@@ -3248,6 +3415,10 @@ export default function ManagementPage() {
                 <div className="adminSectionHead" style={{ marginBottom: 10 }}>
                   <h3>기준정보 바로가기</h3>
                   <span className="meta">입력 중 필요한 경우</span>
+                </div>
+                <div className="badgeRow" style={{ marginTop: 0, marginBottom: 10 }}>
+                  <span className="softBadge">구분 {categories.length}개</span>
+                  <span className="softBadge">위치 {locations.length}개</span>
                 </div>
                 <div className="actions">
                   <button className="btn secondary small" type="button" onClick={openCategoryManager}>

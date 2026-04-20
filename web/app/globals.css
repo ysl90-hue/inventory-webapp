@@ -559,6 +559,24 @@ a {
   backdrop-filter: blur(6px);
 }
 
+.statCardButton {
+  width: 100%;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.statCardButton:hover {
+  border-color: #7ab7aa;
+  box-shadow: 0 10px 18px rgba(15, 118, 110, 0.08);
+}
+
+.versionAlertPanel {
+  border-color: #b9e3c8;
+  background: rgba(232, 247, 239, 0.72);
+}
+
 .statValue {
   margin-top: 4px;
   font-size: 1.1rem;
@@ -1250,6 +1268,11 @@ th {
 
   .statsGrid {
     grid-template-columns: 1fr;
+  }
+
+  .versionAlertPanel .adminHeaderRow {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .toolbarSearch {
