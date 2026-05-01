@@ -137,6 +137,25 @@ a {
   gap: 12px;
 }
 
+.groupedResults {
+  display: grid;
+  gap: 14px;
+}
+
+.resultGroup {
+  display: grid;
+  gap: 10px;
+}
+
+.resultGroupHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 4px;
+  border-bottom: 1px dashed #d8cebf;
+}
+
 .mobileQuickPanel {
   display: grid;
   gap: 10px;
@@ -1285,6 +1304,11 @@ th {
 
   .searchAssistGrid {
     grid-template-columns: 1fr;
+  }
+
+  .resultGroupHead {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .mobileQuickPanel .quickActionRow {

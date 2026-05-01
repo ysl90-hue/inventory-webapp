@@ -6,9 +6,19 @@ export type ReleaseNote = {
 };
 
 export const RELEASE_NOTES_FORCE_OPEN_KEY = "inventory_release_notes_force_open_version";
-export const APP_VERSION = "v1.5.2";
+export const APP_VERSION = "v1.6.0";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
+  {
+    version: "v1.6.0",
+    date: "2026-05-02",
+    summary: "검색, 최근 이력, 기준정보 관리의 운영 확인성과 모바일 입력 흐름을 더 강화했습니다.",
+    items: [
+      "검색 결과를 구분별 또는 위치별로 묶어서 볼 수 있고, 각 품목의 최근 수정일도 함께 확인할 수 있습니다.",
+      "최근 이력과 품목별 이력에서 작업 시간, 기록자, 정상품/B급 여부를 더 자세히 표시하고 수정 확인창에는 변경 전후 비교를 추가했습니다.",
+      "구분, 위치, 품종 삭제 전에 영향 범위를 더 분명하게 안내하고 기준정보 관리에는 사용 중/미사용 현황을 표시하도록 정리했습니다.",
+    ],
+  },
   {
     version: "v1.5.2",
     date: "2026-04-21",

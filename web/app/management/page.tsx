@@ -336,6 +336,7 @@ export default function ManagementPage() {
   const [searchField, setSearchField] = useState<PartSearchField>("all");
   const [searchCategoryFilter, setSearchCategoryFilter] = useState<string>("ALL");
   const [searchPositionFilter, setSearchPositionFilter] = useState<string>("ALL");
+  const [searchGroupBy, setSearchGroupBy] = useState<"flat" | "category" | "position">("flat");
   const [showLowOnly, setShowLowOnly] = useState(false);
   const [partsSort, setPartsSort] = useState<"item" | "stockAsc" | "stockDesc" | "designation">("item");
   const [loading, setLoading] = useState(true);
@@ -399,6 +400,8 @@ export default function ManagementPage() {
   const locationFileInputRef = useRef<HTMLInputElement | null>(null);
   const stockSectionRef = useRef<HTMLElement | null>(null);
   const seenVersionRef = useRef(APP_VERSION);
+  const txQtyInputRef = useRef<HTMLInputElement | null>(null);
+  const txMemoInputRef = useRef<HTMLInputElement | null>(null);
 
   const isAdmin = authRole === "admin";
   const deferredSearchInput = useDeferredValue(searchInput);
@@ -475,6 +478,14 @@ export default function ManagementPage() {
     }
     return counts;
   }, [parts]);
+  const usedCategoryCount = useMemo(
+    () => categories.filter((category) => (partsPerCategory.get(category.name) || 0) > 0).length,
+    [categories, partsPerCategory],
+  );
+  const usedLocationCount = useMemo(
+    () => locations.filter((location) => (partsPerLocation.get(location.code) || 0) > 0).length,
+    [locations, partsPerLocation],
+  );
 
   function stopScannerResources() {
     if (scannerCloseTimerRef.current) {
@@ -1239,6 +1250,10 @@ export default function ManagementPage() {
       .filter((tx) => tx.part_id === selectedPart.id || tx.parts?.id === selectedPart.id)
       .slice(0, 5);
   }, [selectedPart, txHistory]);
+  const currentEditingTransaction = useMemo(() => {
+    if (!txEditForm) return null;
+    return txHistory.find((tx) => tx.id === txEditForm.id) || null;
+  }, [txEditForm, txHistory]);
   const txQtyNumber = Number(txForm.qty);
   const isTxQtyValid = Number.isFinite(txQtyNumber) && txQtyNumber > 0;
   const txQtyStepOptions = txForm.txType === "OUT" ? [1, 2, 5] : [1, 5, 10];
@@ -1281,6 +1296,37 @@ export default function ManagementPage() {
       );
     });
   }, [selectedPart, txHistory, txHistoryFilter, txHistoryOnlySelectedPart, txHistorySearch]);
+  const adjustHistoryCount = useMemo(() => txHistory.filter((tx) => tx.tx_type === "ADJUST").length, [txHistory]);
+  const latestHistoryActor = useMemo(() => {
+    const latest = txHistory[0];
+    if (!latest) return null;
+    return {
+      actor: latest.actor_name || "알 수 없음",
+      createdAt: latest.created_at,
+    };
+  }, [txHistory]);
+  const groupedFilteredParts = useMemo(() => {
+    if (searchGroupBy === "flat") {
+      return [{ key: "flat", label: "전체 결과", parts: filteredParts }];
+    }
+
+    const grouped = new Map<string, Part[]>();
+    for (const part of filteredParts) {
+      const key =
+        searchGroupBy === "category"
+          ? part.location || "미분류"
+          : (part.position || "미지정").toUpperCase() || "미지정";
+      grouped.set(key, [...(grouped.get(key) || []), part]);
+    }
+
+    return [...grouped.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([label, groupedParts]) => ({
+        key: `${searchGroupBy}-${label}`,
+        label,
+        parts: groupedParts,
+      }));
+  }, [filteredParts, searchGroupBy]);
   const todayHistory = useMemo(() => {
     const today = formatDateInput();
     return txHistory.filter((tx) => formatDateInput(tx.created_at) === today);
@@ -1305,6 +1351,12 @@ export default function ManagementPage() {
     }, 80);
     return () => window.clearTimeout(timer);
   }, [activeTab, isMobileLayout, selectedPart?.id]);
+
+  useEffect(() => {
+    if (!isMobileLayout || activeTab !== "stock" || !selectedPart) return;
+    const timer = window.setTimeout(() => txQtyInputRef.current?.focus(), 140);
+    return () => window.clearTimeout(timer);
+  }, [activeTab, isMobileLayout, selectedPart]);
 
   useEffect(() => {
     seenVersionRef.current = APP_VERSION;
@@ -1399,6 +1451,9 @@ export default function ManagementPage() {
     }));
     setActiveTab("stock");
     setError(null);
+    if (isMobileLayout) {
+      window.setTimeout(() => txQtyInputRef.current?.focus(), 120);
+    }
   }
 
   function applyQuantityShortcut(amount: number) {
@@ -1770,7 +1825,8 @@ export default function ManagementPage() {
   }
 
   async function deleteCategory(category: PartCategory) {
-    if (!window.confirm(`구분 '${category.name}'을(를) 삭제할까요?`)) return;
+    const linkedParts = partsPerCategory.get(category.name) || 0;
+    if (!window.confirm(`구분 '${category.name}'을(를) 삭제할까요?\n현재 이 구분을 사용하는 파트 ${linkedParts}개`)) return;
     setError(null);
     setDeletingCategoryId(category.id);
     try {
@@ -1787,7 +1843,8 @@ export default function ManagementPage() {
   }
 
   async function deleteLocation(location: PartLocation) {
-    if (!window.confirm(`위치 '${location.code}'을(를) 삭제할까요?`)) return;
+    const linkedParts = partsPerLocation.get(location.code) || 0;
+    if (!window.confirm(`위치 '${location.code}'을(를) 삭제할까요?\n현재 이 위치를 사용하는 파트 ${linkedParts}개`)) return;
     setError(null);
     setDeletingLocationId(location.id);
     try {
@@ -1891,8 +1948,9 @@ export default function ManagementPage() {
       return;
     }
 
+    const linkedHistoryCount = txHistory.filter((tx) => tx.part_id === part.id || tx.parts?.id === part.id).length;
     const confirmed = window.confirm(
-      `${part.item_number} (${part.designation}) 품종을 삭제하시겠습니까?\n관련 이력도 함께 삭제될 수 있습니다.`,
+      `${part.item_number} (${part.designation}) 품종을 삭제하시겠습니까?\n관련 최근 이력 ${linkedHistoryCount}건이 함께 영향을 받을 수 있습니다.`,
     );
     if (!confirmed) return;
 
@@ -2295,6 +2353,20 @@ export default function ManagementPage() {
                   </div>
                 </div>
               </div>
+              <div className="formRow" style={{ marginTop: 12, marginBottom: 0 }}>
+                <div className="meta">결과 묶음 보기</div>
+                <div className="filterChips">
+                  <button className={`btn secondary small ${searchGroupBy === "flat" ? "activeChoice" : ""}`} type="button" onClick={() => setSearchGroupBy("flat")}>
+                    일반 목록
+                  </button>
+                  <button className={`btn secondary small ${searchGroupBy === "category" ? "activeChoice" : ""}`} type="button" onClick={() => setSearchGroupBy("category")}>
+                    구분별 묶음
+                  </button>
+                  <button className={`btn secondary small ${searchGroupBy === "position" ? "activeChoice" : ""}`} type="button" onClick={() => setSearchGroupBy("position")}>
+                    위치별 묶음
+                  </button>
+                </div>
+              </div>
             </section>
           ) : null}
 
@@ -2304,8 +2376,17 @@ export default function ManagementPage() {
               <div className="meta">{filteredParts.length}건</div>
             </div>
             {isMobileLayout ? (
-              <div className="partsCards">
-                {filteredParts.map((part) => {
+              <div className="groupedResults">
+                {groupedFilteredParts.map((group) => (
+                  <section key={group.key} className="resultGroup">
+                    {searchGroupBy !== "flat" ? (
+                      <div className="resultGroupHead">
+                        <strong>{group.label}</strong>
+                        <span className="meta">{group.parts.length}건</span>
+                      </div>
+                    ) : null}
+                    <div className="partsCards">
+                {group.parts.map((part) => {
                   const low = isPartLow(part, minimumStockValue);
                   const locationInfo = locationsByCode.get((part.position || "").toUpperCase());
                   return (
@@ -2346,6 +2427,9 @@ export default function ManagementPage() {
                           이력
                         </button>
                       </div>
+                      <div className="meta" style={{ marginTop: 8 }}>
+                        최근 수정 {new Date(part.updated_at).toLocaleDateString("ko-KR")}
+                      </div>
                       {isAdmin ? (
                         <div className="actions" style={{ marginTop: 10 }}>
                           <button className="btn secondary small" type="button" onClick={() => editPart(part)}>
@@ -2359,6 +2443,9 @@ export default function ManagementPage() {
                     </article>
                   );
                 })}
+                    </div>
+                  </section>
+                ))}
                 {!loading && search.trim().length === 0 ? (
                   <div className="panelNotice">검색어를 입력하면 결과가 표시됩니다.</div>
                 ) : null}
@@ -2367,7 +2454,16 @@ export default function ManagementPage() {
                 ) : null}
               </div>
             ) : (
-              <div style={{ overflowX: "auto" }}>
+              <div className="groupedResults">
+                {groupedFilteredParts.map((group) => (
+                  <section key={group.key} className="resultGroup">
+                    {searchGroupBy !== "flat" ? (
+                      <div className="resultGroupHead">
+                        <strong>{group.label}</strong>
+                        <span className="meta">{group.parts.length}건</span>
+                      </div>
+                    ) : null}
+                    <div style={{ overflowX: "auto" }}>
                 <table>
                   <thead>
                     <tr>
@@ -2382,7 +2478,7 @@ export default function ManagementPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredParts.map((part) => {
+                    {group.parts.map((part) => {
                       const locationInfo = locationsByCode.get((part.position || "").toUpperCase());
                       return (
                       <tr key={part.id}>
@@ -2393,6 +2489,7 @@ export default function ManagementPage() {
                             {part.designation}
                           </button>
                           {part.spare_parts_identifier ? <div className="meta partMemo">{part.spare_parts_identifier}</div> : null}
+                          <div className="meta">최근 수정 {new Date(part.updated_at).toLocaleDateString("ko-KR")}</div>
                         </td>
                         <td className={isPartLow(part, minimumStockValue) ? "low" : undefined}>
                           <button className="textTrigger stockValueButton" type="button" onClick={() => openPartHistory(part)}>
@@ -2428,18 +2525,17 @@ export default function ManagementPage() {
                         ) : null}
                       </tr>
                     )})}
-                    {!loading && search.trim().length === 0 ? (
-                      <tr>
-                        <td colSpan={isAdmin ? 8 : 7}>검색어를 입력하면 결과가 표시됩니다.</td>
-                      </tr>
-                    ) : null}
-                    {!loading && search.trim().length > 0 && filteredParts.length === 0 ? (
-                      <tr>
-                        <td colSpan={isAdmin ? 8 : 7}>검색 결과가 없습니다.</td>
-                      </tr>
-                    ) : null}
                   </tbody>
                 </table>
+                    </div>
+                  </section>
+                ))}
+                {!loading && search.trim().length === 0 ? (
+                  <div className="panelNotice">검색어를 입력하면 결과가 표시됩니다.</div>
+                ) : null}
+                {!loading && search.trim().length > 0 && filteredParts.length === 0 ? (
+                  <div className="panelNotice">검색 결과가 없습니다.</div>
+                ) : null}
               </div>
             )}
           </section>
@@ -2562,6 +2658,7 @@ export default function ManagementPage() {
                 <label className="label">수량</label>
                 <div className="inlineFieldRow">
                   <input
+                    ref={txQtyInputRef}
                     className="input"
                     type="number"
                     inputMode="decimal"
@@ -2570,6 +2667,12 @@ export default function ManagementPage() {
                     autoComplete="off"
                     value={txForm.qty}
                     onChange={(e) => setTxForm((v) => ({ ...v, qty: e.target.value }))}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        txMemoInputRef.current?.focus();
+                      }
+                    }}
                   />
                   <span className="unitBadge">{selectedPart?.unit_of_quantity || "EA"}</span>
                 </div>
@@ -2619,6 +2722,7 @@ export default function ManagementPage() {
               <div className="formRow">
                 <label className="label">메모</label>
                 <input
+                  ref={txMemoInputRef}
                   className="input"
                   autoComplete="off"
                   value={txForm.memo}
@@ -2663,9 +2767,10 @@ export default function ManagementPage() {
                   <div key={tx.id} className="historyMiniItem">
                     <div className="historyMiniHead">
                       <span className={`txBadge ${tx.tx_type === "OUT" ? "out" : "in"}`}>{formatTxTypeLabel(tx.tx_type)}</span>
-                      <strong>{new Date(tx.created_at).toLocaleDateString("ko-KR")}</strong>
+                      <strong>{new Date(tx.created_at).toLocaleString("ko-KR")}</strong>
                     </div>
                     <div>{formatTransactionSplitQty(tx)}</div>
+                    <div className="meta">{tx.actor_name || "기록자 없음"} · {tx.is_b_grade ? "B급" : "정상품"}</div>
                     <div className="meta">{tx.memo || "메모 없음"}</div>
                   </div>
                 ))}
@@ -2691,6 +2796,11 @@ export default function ManagementPage() {
               <div className="quickStatCard">
                 <div className="meta">오늘 사용 수량</div>
                 <strong>{todayOutQty}</strong>
+              </div>
+              <div className="quickStatCard">
+                <div className="meta">수정내역 누적</div>
+                <strong>{adjustHistoryCount}건</strong>
+                {latestHistoryActor ? <div className="meta">최근 작업 {latestHistoryActor.actor}</div> : null}
               </div>
             </section>
             <div className="formRow" style={{ marginBottom: 12 }}>
@@ -2736,6 +2846,7 @@ export default function ManagementPage() {
                     <div className="badgeRow">
                       <span className="softBadge">{formatTransactionSplitQty(tx)}</span>
                       <span className="softBadge">{tx.parts?.location || "구분 없음"}</span>
+                      <span className={`softBadge ${tx.tx_type === "ADJUST" ? "warn" : ""}`}>{tx.actor_name || "기록자 없음"}</span>
                       {tx.parts?.item_number && selectedPart && tx.parts.item_number === selectedPart.item_number ? <span className="softBadge">선택 품목</span> : null}
                     </div>
                     <div className="kvGrid">
@@ -2745,15 +2856,15 @@ export default function ManagementPage() {
                       </div>
                       <div>
                         <span className="meta">날짜</span>
-                        <div>{new Date(tx.created_at).toLocaleDateString("ko-KR")}</div>
+                        <div>{new Date(tx.created_at).toLocaleString("ko-KR")}</div>
                       </div>
                       <div>
                         <span className="meta">메모</span>
                         <div>{tx.memo || "-"}</div>
                       </div>
                       <div>
-                        <span className="meta">사용자</span>
-                        <div>{tx.actor_name || "-"}</div>
+                        <span className="meta">사용자 / 등급</span>
+                        <div>{tx.actor_name || "-"} / {tx.is_b_grade ? "B급" : "정상품"}</div>
                       </div>
                     </div>
                     {tx.tx_type !== "ADJUST" ? (
@@ -2798,8 +2909,8 @@ export default function ManagementPage() {
                         <td>{tx.parts?.location || "-"}</td>
                         <td>{formatTransactionSplitQty(tx)}</td>
                         <td>{tx.memo || "-"}</td>
-                        <td>{new Date(tx.created_at).toLocaleDateString("ko-KR")}</td>
-                        <td>{tx.actor_name || "-"}</td>
+                        <td>{new Date(tx.created_at).toLocaleString("ko-KR")}</td>
+                        <td>{tx.actor_name || "-"} / {tx.is_b_grade ? "B급" : "정상품"}</td>
                         <td>
                           {tx.tx_type === "ADJUST" ? (
                             <span className="meta">수정내역</span>
@@ -3448,6 +3559,16 @@ export default function ManagementPage() {
                   <h3>기준정보 바로가기</h3>
                   <span className="meta">입력 중 필요한 경우</span>
                 </div>
+                <div className="adminChecklist" style={{ marginBottom: 10 }}>
+                  <div className="adminChecklistItem">
+                    <span>구분 사용 현황</span>
+                    <strong>{usedCategoryCount} 사용 / {categories.length - usedCategoryCount} 미사용</strong>
+                  </div>
+                  <div className="adminChecklistItem">
+                    <span>위치 사용 현황</span>
+                    <strong>{usedLocationCount} 사용 / {locations.length - usedLocationCount} 미사용</strong>
+                  </div>
+                </div>
                 <div className="badgeRow" style={{ marginTop: 0, marginBottom: 10 }}>
                   <span className="softBadge">구분 {categories.length}개</span>
                   <span className="softBadge">위치 {locations.length}개</span>
@@ -3499,6 +3620,7 @@ export default function ManagementPage() {
                     <div className="badgeRow">
                       <span className="softBadge">{formatTransactionSplitQty(tx)}</span>
                       <span className="softBadge">{tx.parts?.location || partHistoryModalPart.location || "구분 없음"}</span>
+                      <span className={`softBadge ${tx.tx_type === "ADJUST" ? "warn" : ""}`}>{tx.actor_name || "기록자 없음"}</span>
                     </div>
                     <div className="kvGrid">
                       <div>
@@ -3507,15 +3629,15 @@ export default function ManagementPage() {
                       </div>
                       <div>
                         <span className="meta">날짜</span>
-                        <div>{new Date(tx.created_at).toLocaleDateString("ko-KR")}</div>
+                        <div>{new Date(tx.created_at).toLocaleString("ko-KR")}</div>
                       </div>
                       <div>
                         <span className="meta">메모</span>
                         <div>{tx.memo || "-"}</div>
                       </div>
                       <div>
-                        <span className="meta">사용자</span>
-                        <div>{tx.actor_name || "-"}</div>
+                        <span className="meta">사용자 / 등급</span>
+                        <div>{tx.actor_name || "-"} / {tx.is_b_grade ? "B급" : "정상품"}</div>
                       </div>
                     </div>
                   </article>
@@ -3548,8 +3670,8 @@ export default function ManagementPage() {
                         <td>{tx.parts?.location || partHistoryModalPart.location || "-"}</td>
                         <td>{formatTransactionSplitQty(tx)}</td>
                         <td>{tx.memo || "-"}</td>
-                        <td>{new Date(tx.created_at).toLocaleDateString("ko-KR")}</td>
-                        <td>{tx.actor_name || "-"}</td>
+                        <td>{new Date(tx.created_at).toLocaleString("ko-KR")}</td>
+                        <td>{tx.actor_name || "-"} / {tx.is_b_grade ? "B급" : "정상품"}</td>
                       </tr>
                     ))}
                     {!loading && selectedPartHistory.length === 0 ? (
@@ -3601,7 +3723,14 @@ export default function ManagementPage() {
                 <div key={category.id} className="manageRow">
                   <div className="manageRowBody">
                     <strong>{category.name}</strong>
-                    <span className="meta">등록된 파트 {partsPerCategory.get(category.name) || 0}개</span>
+                    <div className="badgeRow" style={{ marginTop: 0 }}>
+                      <span className={`softBadge ${(partsPerCategory.get(category.name) || 0) === 0 ? "warn" : ""}`}>
+                        등록된 파트 {partsPerCategory.get(category.name) || 0}개
+                      </span>
+                      <span className={`softBadge ${(partsPerCategory.get(category.name) || 0) === 0 ? "warn" : ""}`}>
+                        {(partsPerCategory.get(category.name) || 0) > 0 ? "사용 중" : "미사용"}
+                      </span>
+                    </div>
                   </div>
                   <div className="actions">
                     <button className="btn secondary small" type="button" onClick={() => startEditCategory(category)}>
@@ -3681,7 +3810,14 @@ export default function ManagementPage() {
                   <div className="manageRowBody">
                     <strong>{location.code}</strong>
                     <span className="meta">{location.description || "설명 없음"}</span>
-                    <span className="meta">등록된 파트 {partsPerLocation.get(location.code) || 0}개</span>
+                    <div className="badgeRow" style={{ marginTop: 0 }}>
+                      <span className={`softBadge ${(partsPerLocation.get(location.code) || 0) === 0 ? "warn" : ""}`}>
+                        등록된 파트 {partsPerLocation.get(location.code) || 0}개
+                      </span>
+                      <span className={`softBadge ${(partsPerLocation.get(location.code) || 0) === 0 ? "warn" : ""}`}>
+                        {(partsPerLocation.get(location.code) || 0) > 0 ? "사용 중" : "미사용"}
+                      </span>
+                    </div>
                     {location.image_url ? (
                       <div className="manageImagePreview">
                         <img src={location.image_url} alt={`${location.code} 위치`} className="locationImage" />
@@ -3867,8 +4003,18 @@ export default function ManagementPage() {
                 </div>
                 <div className="scannerConfirmBox">
                   <div><strong>{txActionConfirm.form.itemNumber} / {txActionConfirm.form.designation}</strong></div>
+                  {currentEditingTransaction ? (
+                    <>
+                      <div className="meta" style={{ marginTop: 4 }}>
+                        변경 전: {currentEditingTransaction.tx_type === "IN" ? "입고" : "사용"} / 수량 {currentEditingTransaction.qty} / 날짜 {formatDateInput(currentEditingTransaction.created_at)} / {currentEditingTransaction.is_b_grade ? "B급" : "정상품"}
+                      </div>
+                      <div className="meta" style={{ marginTop: 4 }}>
+                        변경 후: {txActionConfirm.form.txType === "IN" ? "입고" : "사용"} / 수량 {txActionConfirm.form.qty} / 날짜 {txActionConfirm.form.txDate} / {txActionConfirm.form.isBGrade ? "B급" : "정상품"}
+                      </div>
+                    </>
+                  ) : null}
                   <div className="meta" style={{ marginTop: 4 }}>
-                    {txActionConfirm.form.txType === "IN" ? "입고" : "사용"} / 수량 {txActionConfirm.form.qty} / 날짜 {txActionConfirm.form.txDate}
+                    메모 {txActionConfirm.form.memo || "-"}
                   </div>
                   <div className="meta" style={{ marginTop: 6 }}>
                     수정이 완료되면 재고도 변경된 내용 기준으로 다시 계산됩니다.
@@ -3891,7 +4037,10 @@ export default function ManagementPage() {
                 <div className="scannerConfirmBox">
                   <div><strong>{txActionConfirm.tx.parts?.item_number || "-"} / {txActionConfirm.tx.parts?.designation || "-"}</strong></div>
                   <div className="meta" style={{ marginTop: 4 }}>
-                    {formatTxTypeLabel(txActionConfirm.tx.tx_type)} / 수량 {txActionConfirm.tx.qty}
+                    {formatTxTypeLabel(txActionConfirm.tx.tx_type)} / 수량 {txActionConfirm.tx.qty} / {txActionConfirm.tx.is_b_grade ? "B급" : "정상품"}
+                  </div>
+                  <div className="meta" style={{ marginTop: 4 }}>
+                    기록 {new Date(txActionConfirm.tx.created_at).toLocaleString("ko-KR")} / {txActionConfirm.tx.actor_name || "기록자 없음"}
                   </div>
                   <div className="meta" style={{ marginTop: 6 }}>
                     삭제가 완료되면 이력 기록이 지워지고, 재고 수량도 원래 상태로 함께 원복됩니다.
