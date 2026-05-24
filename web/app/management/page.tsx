@@ -337,6 +337,7 @@ export default function ManagementPage() {
   const [searchCategoryFilter, setSearchCategoryFilter] = useState<string>("ALL");
   const [searchPositionFilter, setSearchPositionFilter] = useState<string>("ALL");
   const [searchGroupBy, setSearchGroupBy] = useState<"flat" | "category" | "position">("flat");
+  const [searchAssistOpen, setSearchAssistOpen] = useState(false);
   const [showLowOnly, setShowLowOnly] = useState(false);
   const [partsSort, setPartsSort] = useState<"item" | "stockAsc" | "stockDesc" | "designation">("item");
   const [loading, setLoading] = useState(true);
@@ -1364,6 +1365,12 @@ export default function ManagementPage() {
   }, [activeTab, isMobileLayout, selectedPart]);
 
   useEffect(() => {
+    if (hasSearchAssistSelection) {
+      setSearchAssistOpen(true);
+    }
+  }, [hasSearchAssistSelection]);
+
+  useEffect(() => {
     seenVersionRef.current = APP_VERSION;
   }, []);
 
@@ -2324,65 +2331,78 @@ export default function ManagementPage() {
 
           <section className="panel" style={{ marginBottom: 14 }}>
             <div className="adminHeaderRow">
-              <h2 style={{ margin: 0 }}>{search.trim().length > 0 ? "결과 보조 필터" : "구분/위치 바로 보기"}</h2>
-              <div className="meta">
-                {search.trim().length > 0
-                  ? "검색 결과를 구분과 위치로 다시 좁힐 수 있습니다."
-                  : "검색어 없이도 구분이나 위치만 눌러 해당 품목 목록을 바로 볼 수 있습니다."}
-              </div>
-            </div>
-            <div className="searchAssistGrid">
               <div>
-                <div className="meta" style={{ marginBottom: 8 }}>구분</div>
-                <div className="filterChips">
-                  <button className={`btn secondary small ${searchCategoryFilter === "ALL" ? "activeChoice" : ""}`} type="button" onClick={() => setSearchCategoryFilter("ALL")}>
-                    전체
-                  </button>
-                  {searchCategoryOptions.map(([name, count]) => (
-                    <button
-                      key={name}
-                      className={`btn secondary small ${searchCategoryFilter === name ? "activeChoice" : ""}`}
-                      type="button"
-                      onClick={() => setSearchCategoryFilter(name)}
-                    >
-                      {name} {count}
-                    </button>
-                  ))}
+                <h2 style={{ margin: 0 }}>{search.trim().length > 0 ? "결과 보조 필터" : "구분/위치로 검색"}</h2>
+                <div className="meta">
+                  {search.trim().length > 0
+                    ? "검색 결과를 구분과 위치로 다시 좁힐 수 있습니다."
+                    : "검색어 없이도 구분이나 위치만 눌러 해당 품목 목록을 바로 볼 수 있습니다."}
                 </div>
               </div>
-              <div>
-                <div className="meta" style={{ marginBottom: 8 }}>위치</div>
-                <div className="filterChips">
-                  <button className={`btn secondary small ${searchPositionFilter === "ALL" ? "activeChoice" : ""}`} type="button" onClick={() => setSearchPositionFilter("ALL")}>
-                    전체
-                  </button>
-                  {searchPositionOptions.slice(0, 10).map(([code, count]) => (
-                    <button
-                      key={code}
-                      className={`btn secondary small ${searchPositionFilter === code ? "activeChoice" : ""}`}
-                      type="button"
-                      onClick={() => setSearchPositionFilter(code)}
-                    >
-                      {code} {count}
-                    </button>
-                  ))}
+              <button className="btn secondary small" type="button" onClick={() => setSearchAssistOpen((value) => !value)}>
+                {searchAssistOpen ? "접기" : "펼치기"}
+              </button>
+            </div>
+            {searchAssistOpen ? (
+              <>
+                <div className="searchAssistGrid">
+                  <div>
+                    <div className="meta" style={{ marginBottom: 8 }}>구분</div>
+                    <div className="filterChips">
+                      <button className={`btn secondary small ${searchCategoryFilter === "ALL" ? "activeChoice" : ""}`} type="button" onClick={() => setSearchCategoryFilter("ALL")}>
+                        전체
+                      </button>
+                      {searchCategoryOptions.map(([name, count]) => (
+                        <button
+                          key={name}
+                          className={`btn secondary small ${searchCategoryFilter === name ? "activeChoice" : ""}`}
+                          type="button"
+                          onClick={() => setSearchCategoryFilter(name)}
+                        >
+                          {name} {count}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="meta" style={{ marginBottom: 8 }}>위치</div>
+                    <div className="filterChips">
+                      <button className={`btn secondary small ${searchPositionFilter === "ALL" ? "activeChoice" : ""}`} type="button" onClick={() => setSearchPositionFilter("ALL")}>
+                        전체
+                      </button>
+                      {searchPositionOptions.slice(0, 10).map(([code, count]) => (
+                        <button
+                          key={code}
+                          className={`btn secondary small ${searchPositionFilter === code ? "activeChoice" : ""}`}
+                          type="button"
+                          onClick={() => setSearchPositionFilter(code)}
+                        >
+                          {code} {count}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
+                <div className="formRow" style={{ marginTop: 12, marginBottom: 0 }}>
+                  <div className="meta">결과 묶음 보기</div>
+                  <div className="filterChips">
+                    <button className={`btn secondary small ${searchGroupBy === "flat" ? "activeChoice" : ""}`} type="button" onClick={() => setSearchGroupBy("flat")}>
+                      일반 목록
+                    </button>
+                    <button className={`btn secondary small ${searchGroupBy === "category" ? "activeChoice" : ""}`} type="button" onClick={() => setSearchGroupBy("category")}>
+                      구분별 묶음
+                    </button>
+                    <button className={`btn secondary small ${searchGroupBy === "position" ? "activeChoice" : ""}`} type="button" onClick={() => setSearchGroupBy("position")}>
+                      위치별 묶음
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="panelNotice" style={{ marginTop: 12 }}>
+                필요할 때 펼쳐서 구분이나 위치만 선택해 바로 품목을 볼 수 있습니다.
               </div>
-            </div>
-            <div className="formRow" style={{ marginTop: 12, marginBottom: 0 }}>
-              <div className="meta">결과 묶음 보기</div>
-              <div className="filterChips">
-                <button className={`btn secondary small ${searchGroupBy === "flat" ? "activeChoice" : ""}`} type="button" onClick={() => setSearchGroupBy("flat")}>
-                  일반 목록
-                </button>
-                <button className={`btn secondary small ${searchGroupBy === "category" ? "activeChoice" : ""}`} type="button" onClick={() => setSearchGroupBy("category")}>
-                  구분별 묶음
-                </button>
-                <button className={`btn secondary small ${searchGroupBy === "position" ? "activeChoice" : ""}`} type="button" onClick={() => setSearchGroupBy("position")}>
-                  위치별 묶음
-                </button>
-              </div>
-            </div>
+            )}
           </section>
 
           <section className="panel">

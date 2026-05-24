@@ -6,9 +6,17 @@ export type ReleaseNote = {
 };
 
 export const RELEASE_NOTES_FORCE_OPEN_KEY = "inventory_release_notes_force_open_version";
-export const APP_VERSION = "v1.6.1";
+export const APP_VERSION = "v1.6.2";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
+  {
+    version: "v1.6.2",
+    date: "2026-05-24",
+    summary: "구분/위치 검색 영역을 필요할 때만 펼쳐 쓰도록 정리했습니다.",
+    items: [
+      "검색 화면의 구분/위치 검색 영역을 기본 접힘 상태로 바꾸고, 명칭도 '구분/위치로 검색'으로 정리했습니다.",
+    ],
+  },
   {
     version: "v1.6.1",
     date: "2026-05-24",
