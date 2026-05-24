@@ -1365,6 +1365,12 @@ export default function ManagementPage() {
     return () => window.clearTimeout(timer);
   }, [activeTab, isMobileLayout, selectedPart]);
 
+  useEffect(() => {
+    if (search.trim().length > 0) {
+      setSearchAssistOpen(true);
+    }
+  }, [search]);
+
   function buildNextTxForm(options?: { partId?: string | null; itemNumber?: string; txType?: "IN" | "OUT" }) {
     return {
       ...createEmptyTxForm(),
