@@ -339,6 +339,7 @@ export default function ManagementPage() {
   const [searchGroupBy, setSearchGroupBy] = useState<"flat" | "category" | "position">("flat");
   const [searchAssistOpen, setSearchAssistOpen] = useState(false);
   const [showLowOnly, setShowLowOnly] = useState(false);
+  const [keepTxDate, setKeepTxDate] = useState(true);
   const [partsSort, setPartsSort] = useState<"item" | "stockAsc" | "stockDesc" | "designation">("item");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1372,6 +1373,16 @@ export default function ManagementPage() {
     setSearchAssistOpen(false);
   }, [hasSearchAssistSelection, search]);
 
+  function buildNextTxForm(options?: { partId?: string | null; itemNumber?: string; txType?: "IN" | "OUT" }) {
+    return {
+      ...createEmptyTxForm(),
+      txType: options?.txType ?? txForm.txType,
+      txDate: keepTxDate ? txForm.txDate : formatDateInput(),
+      partId: options?.partId ?? null,
+      itemNumber: options?.itemNumber ?? "",
+    };
+  }
+
   useEffect(() => {
     seenVersionRef.current = APP_VERSION;
   }, []);
@@ -1615,7 +1626,7 @@ export default function ManagementPage() {
       isBGrade: txForm.isBGrade,
       reclassifiedToBGrade: reclassifyToBGrade,
     });
-    setTxForm(createEmptyTxForm());
+    setTxForm(buildNextTxForm());
     showSuccessToast(
       reclassifyToBGrade
         ? "사용 처리 후 B급 입고까지 완료했습니다."
@@ -1721,12 +1732,7 @@ export default function ManagementPage() {
     const lastType = txSubmitResult.txType;
     setTxSubmitResult(null);
     if (mode === "same-part") {
-      setTxForm({
-        ...createEmptyTxForm(),
-        partId: lastPart.id,
-        itemNumber: lastPart.item_number,
-        txType: lastType,
-      });
+      setTxForm(buildNextTxForm({ partId: lastPart.id, itemNumber: lastPart.item_number, txType: lastType }));
       setActiveTab("stock");
       return;
     }
@@ -1736,7 +1742,7 @@ export default function ManagementPage() {
       setActiveTab("search");
       return;
     }
-    setTxForm(createEmptyTxForm());
+    setTxForm(buildNextTxForm());
     setActiveTab("stock");
   }
 
@@ -2118,25 +2124,60 @@ export default function ManagementPage() {
 
   return (
     <main className="page">
-      <header className="header">
-        <div>
-          <h1 className="title">6호기 파트 관리 프로그램</h1>
+      <header className="header heroHeader">
+        <div className="heroIntro">
+          <div className="heroEyebrow">Inventory workflow</div>
+          <h1 className="title heroTitle">6호기 파트 관리 프로그램</h1>
+          <p className="sub heroSub">검색, 입고/사용처리, 부족 재고 확인을 한 화면에서 더 빠르게 이어갈 수 있도록 정리된 운영 화면입니다.</p>
+          <div className="heroActionRow">
+            <button className="btn" type="button" onClick={() => setActiveTab("stock")}>
+              바로 입출고
+            </button>
+            <button className="btn secondary" type="button" onClick={() => setActiveTab("search")}>
+              검색 시작
+            </button>
+            <button className="btn secondary" type="button" onClick={() => setLowStockModalOpen(true)}>
+              부족 재고 보기
+            </button>
+          </div>
         </div>
-        <div className="meta">{loading ? "Loading..." : `입고 등록 ${inboundRegisteredCount} / 부족 재고 ${lowCount}`}</div>
+        <section className="heroSnapshot panel">
+          <div className="meta">오늘 작업 스냅샷</div>
+          <strong className="heroSnapshotValue">{todayHistory.length}건</strong>
+          <div className="heroSnapshotGrid">
+            <div>
+              <span className="meta">입고</span>
+              <strong>{todayInQty}</strong>
+            </div>
+            <div>
+              <span className="meta">사용</span>
+              <strong>{todayOutQty}</strong>
+            </div>
+          </div>
+          <div className="meta">{latestHistoryActor ? `최근 작업자 ${latestHistoryActor.actor}` : "최근 작업 이력이 없습니다."}</div>
+        </section>
       </header>
 
-      <section className="statsGrid" aria-label="요약 정보">
-        <button className="statCard statCardButton" type="button" onClick={() => setStockModalOpen(true)}>
+      <section className="statsGrid spotlightStats" aria-label="요약 정보">
+        <button className="statCard statCardButton spotlight registered" type="button" onClick={() => setStockModalOpen(true)}>
           <div className="meta">입고 등록된 품목</div>
           <div className="statValue">{inboundRegisteredCount}</div>
+          <div className="meta">전체 등록 품목 보기</div>
         </button>
-        <button className="statCard statCardButton" type="button" onClick={() => setLowStockModalOpen(true)}>
+        <button className="statCard statCardButton spotlight lowStock" type="button" onClick={() => setLowStockModalOpen(true)}>
           <div className="meta">부족 재고</div>
           <div className={`statValue ${lowCount > 0 ? "low" : ""}`}>{lowCount}</div>
+          <div className="meta">최소재고 이하 품목 확인</div>
         </button>
-        <div className="statCard">
-          <div className="meta">레이아웃</div>
+        <div className="statCard spotlight todayFlow">
+          <div className="meta">오늘 처리</div>
+          <div className="statValue">{todayHistory.length}</div>
+          <div className="meta">입고 {todayInQty} / 사용 {todayOutQty}</div>
+        </div>
+        <div className="statCard spotlight latestTouch">
+          <div className="meta">최근 상태</div>
           <div className="statValue">{isMobileLayout ? "Mobile" : "Desktop"}</div>
+          <div className="meta">{latestHistoryActor ? `${latestHistoryActor.actor} 작업 기록` : "최근 작업 없음"}</div>
         </div>
       </section>
 
@@ -2248,7 +2289,17 @@ export default function ManagementPage() {
 
       {activeTab === "search" ? (
         <>
-          <section className="toolbarPanel panel" aria-label="검색 및 필터">
+          <section className="toolbarPanel panel searchCommandPanel" aria-label="검색 및 필터">
+            <div className="searchPanelHead">
+              <div>
+                <h2 style={{ margin: 0 }}>빠른 검색</h2>
+                <div className="meta">품목번호, 품명, 구분, 위치를 빠르게 좁혀서 바로 입고/사용 작업으로 이어갈 수 있습니다.</div>
+              </div>
+              <div className="badgeRow" style={{ marginTop: 0 }}>
+                <span className="softBadge">부족 재고 강조</span>
+                <span className="softBadge">입고/사용 바로가기</span>
+              </div>
+            </div>
             <div className="toolbarSearch">
               <select className="select" value={searchField} onChange={(e) => setSearchField(e.target.value as PartSearchField)}>
                 <option value="all">전체</option>
@@ -2412,6 +2463,11 @@ export default function ManagementPage() {
               <h2 style={{ margin: 0 }}>검색 결과</h2>
               <div className="meta">{filteredParts.length}건</div>
             </div>
+            <div className="badgeRow searchLegendRow">
+              <span className="softBadge warn">부족 재고는 빨간 강조로 표시됩니다.</span>
+              <span className="softBadge">품명을 누르면 바로 입출고 진행</span>
+              <span className="softBadge">재고 배지를 누르면 이력 확인</span>
+            </div>
             {isMobileLayout ? (
               <div className="groupedResults">
                 {groupedFilteredParts.map((group) => (
@@ -2428,11 +2484,11 @@ export default function ManagementPage() {
                   const locationInfo = locationsByCode.get((part.position || "").toUpperCase());
                   return (
                     <article key={part.id} className="dataCard">
-                    <div className="dataCardHead">
+                    <div className={`dataCardHead ${low ? "attention" : ""}`}>
                       <strong>{part.location || "구분 없음"}</strong>
                       <span className={low ? "low" : undefined}>재고 {part.current_stock}</span>
                     </div>
-                    <div>{part.item_number}</div>
+                    <div className="meta">{part.item_number}</div>
                       <button className="textTrigger" type="button" onClick={() => openStockQuickAction(part)}>
                         {part.designation}
                       </button>
@@ -2442,6 +2498,7 @@ export default function ManagementPage() {
                           {formatSplitStock(part)}
                         </button>
                         <span className="softBadge">{part.unit_of_quantity || "-"}</span>
+                        {low ? <span className="softBadge warn">부족 재고</span> : null}
                       </div>
                       <div className="kvGrid">
                         <div>
@@ -2586,27 +2643,32 @@ export default function ManagementPage() {
               <h2 style={{ margin: 0 }}>입고/사용처리</h2>
               <span className={`statusPill ${txStatusTone}`}>{selectedPart ? "선택 완료" : matchedTxParts.length > 1 ? "선택 필요" : txForm.itemNumber.trim() ? "확인 필요" : "대기중"}</span>
             </div>
-            {isMobileLayout ? (
-              <div className="mobileQuickPanel">
-                <div className="mobileQuickMeta">
-                  <strong>{selectedPart ? selectedPart.designation : "품목을 선택해 주세요"}</strong>
-                  <span className="meta">{selectedPart ? `${selectedPart.item_number} / 재고 ${selectedPart.current_stock}` : "검색이나 스캔 후 바로 입력을 이어갈 수 있습니다."}</span>
-                </div>
-                <div className="quickActionRow">
-                  <button className="btn secondary small" type="button" onClick={() => openScanner("tx")}>
-                    스캔
-                  </button>
-                  <button className="btn secondary small" type="button" onClick={() => setTxForm((prev) => ({ ...prev, txDate: formatDateInput() }))}>
-                    오늘 날짜
-                  </button>
-                  {selectedPart ? (
-                    <button className="btn secondary small" type="button" onClick={clearSelectedTxPart}>
-                      선택 해제
-                    </button>
-                  ) : null}
-                </div>
+            <div className="mobileQuickPanel workflowPanel">
+              <div className="mobileQuickMeta">
+                <strong>{selectedPart ? selectedPart.designation : "품목을 선택해 주세요"}</strong>
+                <span className="meta">{selectedPart ? `${selectedPart.item_number} / 재고 ${selectedPart.current_stock}` : "검색이나 스캔 후 바로 입력을 이어갈 수 있습니다."}</span>
               </div>
-            ) : null}
+              <div className="quickActionRow">
+                <button className="btn secondary small" type="button" onClick={() => openScanner("tx")}>
+                  스캔
+                </button>
+                <button className="btn secondary small" type="button" onClick={() => setTxForm((prev) => ({ ...prev, txDate: formatDateInput() }))}>
+                  오늘 날짜
+                </button>
+                {selectedPart ? (
+                  <button className="btn secondary small" type="button" onClick={clearSelectedTxPart}>
+                    선택 해제
+                  </button>
+                ) : null}
+              </div>
+              <div className="workflowOptionRow">
+                <label className="checkRow">
+                  <input type="checkbox" checked={keepTxDate} onChange={(e) => setKeepTxDate(e.target.checked)} />
+                  날짜 유지
+                </label>
+                <span className="meta">반복 입력 시 같은 날짜를 계속 사용합니다.</span>
+              </div>
+            </div>
             <div className={`selectionSummaryCard ${txStatusTone}`}>
               <div className="selectionSummaryHead">
                 <div>
@@ -2715,7 +2777,7 @@ export default function ManagementPage() {
                 </div>
                 <div className="quickStepRow">
                   {txQtyStepOptions.map((amount) => (
-                    <button key={amount} className="btn secondary small" type="button" onClick={() => applyQuantityShortcut(amount)}>
+                    <button key={amount} className="btn secondary quickStepButton" type="button" onClick={() => applyQuantityShortcut(amount)}>
                       +{amount}
                     </button>
                   ))}
@@ -2782,7 +2844,7 @@ export default function ManagementPage() {
                 <button className="btn" type="submit" disabled={txHasSelectionConflict || insufficientNormalStock || insufficientBGradeStock}>
                   {formatTxModeLabel(txForm.txType)} 저장
                 </button>
-                <button className="btn secondary" type="button" onClick={() => setTxForm(createEmptyTxForm())}>
+                <button className="btn secondary" type="button" onClick={() => setTxForm(buildNextTxForm())}>
                   초기화
                 </button>
               </div>

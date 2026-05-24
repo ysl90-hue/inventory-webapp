@@ -5,7 +5,10 @@
   --muted: #6d6359;
   --line: #dfd5c7;
   --accent: #0f766e;
+  --accent-strong: #115e59;
+  --accent-soft: #d9efe7;
   --warn: #b91c1c;
+  --sun: #f3d58a;
 }
 
 * {
@@ -40,6 +43,90 @@ a {
   align-items: flex-end;
   gap: 12px;
   margin-bottom: 20px;
+}
+
+.heroHeader {
+  align-items: stretch;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.heroIntro {
+  flex: 1;
+  display: grid;
+  gap: 10px;
+  padding: 22px;
+  border-radius: 24px;
+  border: 1px solid rgba(17, 94, 89, 0.12);
+  background:
+    radial-gradient(circle at top left, rgba(243, 213, 138, 0.42), transparent 34%),
+    linear-gradient(135deg, rgba(255, 253, 250, 0.98), rgba(233, 246, 242, 0.9));
+  box-shadow: 0 22px 40px rgba(31, 27, 22, 0.08);
+}
+
+.heroEyebrow {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(17, 94, 89, 0.09);
+  color: var(--accent-strong);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.heroTitle {
+  font-size: clamp(2rem, 4vw, 2.8rem);
+  line-height: 1.02;
+}
+
+.heroSub {
+  max-width: 680px;
+  font-size: 0.98rem;
+}
+
+.heroActionRow {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.heroSnapshot {
+  width: min(280px, 100%);
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  border-radius: 24px;
+  background: linear-gradient(160deg, rgba(15, 118, 110, 0.94), rgba(17, 94, 89, 0.96));
+  color: #f8fffd;
+  box-shadow: 0 20px 38px rgba(15, 118, 110, 0.24);
+}
+
+.heroSnapshot .meta {
+  color: rgba(248, 255, 253, 0.78);
+}
+
+.heroSnapshotValue {
+  font-size: 2.5rem;
+  line-height: 1;
+}
+
+.heroSnapshotGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.heroSnapshotGrid > div {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .title {
@@ -104,6 +191,20 @@ a {
   padding: 12px;
 }
 
+.searchCommandPanel {
+  border-color: rgba(17, 94, 89, 0.16);
+  background: linear-gradient(180deg, rgba(255, 253, 250, 0.98), rgba(244, 251, 248, 0.92));
+  box-shadow: 0 16px 28px rgba(31, 27, 22, 0.05);
+}
+
+.searchPanelHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
 .toolbarSearch {
   display: grid;
   grid-template-columns: 150px minmax(0, 1fr) auto;
@@ -126,9 +227,10 @@ a {
 
 .quickStatCard {
   border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 12px;
-  background: rgba(255, 253, 250, 0.72);
+  border-radius: 16px;
+  padding: 14px;
+  background: rgba(255, 253, 250, 0.88);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 .searchAssistGrid {
@@ -160,10 +262,23 @@ a {
   display: grid;
   gap: 10px;
   margin-bottom: 12px;
-  padding: 12px;
-  border-radius: 12px;
+  padding: 14px;
+  border-radius: 18px;
   border: 1px solid #d9efe7;
-  background: rgba(217, 239, 231, 0.32);
+  background: rgba(217, 239, 231, 0.4);
+}
+
+.workflowPanel {
+  border-color: rgba(17, 94, 89, 0.18);
+  background: linear-gradient(160deg, rgba(217, 239, 231, 0.52), rgba(255, 253, 250, 0.96));
+}
+
+.workflowOptionRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .mobileQuickMeta {
@@ -255,10 +370,11 @@ a {
   display: grid;
   gap: 12px;
   margin-bottom: 14px;
-  padding: 12px;
-  border-radius: 14px;
+  padding: 16px;
+  border-radius: 18px;
   border: 1px solid var(--line);
   background: rgba(255, 253, 250, 0.8);
+  box-shadow: 0 12px 22px rgba(31, 27, 22, 0.04);
 }
 
 .selectionSummaryCard.ready {
@@ -378,6 +494,13 @@ a {
   flex-wrap: wrap;
 }
 
+.quickStepButton {
+  min-width: 58px;
+  height: 36px;
+  border-radius: 999px;
+  font-weight: 800;
+}
+
 .segmentedToggle {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -491,10 +614,11 @@ a {
 .panel {
   background: rgba(255, 253, 250, 0.92);
   border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 14px;
+  border-radius: 18px;
+  padding: 16px;
   backdrop-filter: blur(6px);
   min-width: 0;
+  box-shadow: 0 14px 26px rgba(31, 27, 22, 0.04);
 }
 
 .panel h2 {
@@ -541,20 +665,27 @@ a {
 
 .statsGrid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 14px;
+}
+
+.spotlightStats {
+  gap: 12px;
 }
 
 .tabNav {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+  padding: 6px;
+  border-radius: 999px;
+  background: rgba(255, 253, 250, 0.65);
 }
 
 .tabButton {
-  height: 42px;
-  padding: 0 16px;
+  height: 46px;
+  padding: 0 18px;
   border-radius: 999px;
   border: 1px solid var(--line);
   background: rgba(255, 253, 250, 0.8);
@@ -565,17 +696,19 @@ a {
 }
 
 .tabButton.active {
-  background: var(--accent);
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
   color: #fff;
   border-color: transparent;
+  box-shadow: 0 10px 20px rgba(15, 118, 110, 0.22);
 }
 
 .statCard {
-  background: rgba(255, 253, 250, 0.82);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 10px 12px;
+  background: rgba(255, 253, 250, 0.92);
+  border: 1px solid rgba(17, 94, 89, 0.12);
+  border-radius: 18px;
+  padding: 14px 16px;
   backdrop-filter: blur(6px);
+  box-shadow: 0 18px 30px rgba(31, 27, 22, 0.05);
 }
 
 .statCardButton {
@@ -588,7 +721,38 @@ a {
 
 .statCardButton:hover {
   border-color: #7ab7aa;
-  box-shadow: 0 10px 18px rgba(15, 118, 110, 0.08);
+  box-shadow: 0 18px 28px rgba(15, 118, 110, 0.14);
+  transform: translateY(-1px);
+}
+
+.spotlight {
+  position: relative;
+  overflow: hidden;
+}
+
+.spotlight::after {
+  content: "";
+  position: absolute;
+  inset: auto -18% -30% 45%;
+  height: 90px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.45), transparent 70%);
+  pointer-events: none;
+}
+
+.spotlight.registered {
+  background: linear-gradient(145deg, rgba(255, 253, 250, 0.98), rgba(235, 247, 243, 0.94));
+}
+
+.spotlight.lowStock {
+  background: linear-gradient(145deg, rgba(255, 248, 247, 0.98), rgba(255, 236, 236, 0.9));
+}
+
+.spotlight.todayFlow {
+  background: linear-gradient(145deg, rgba(255, 252, 241, 0.98), rgba(250, 240, 204, 0.78));
+}
+
+.spotlight.latestTouch {
+  background: linear-gradient(145deg, rgba(248, 253, 252, 0.98), rgba(225, 244, 239, 0.86));
 }
 
 .versionAlertPanel {
@@ -597,8 +761,8 @@ a {
 }
 
 .statValue {
-  margin-top: 4px;
-  font-size: 1.1rem;
+  margin-top: 6px;
+  font-size: 1.6rem;
   font-weight: 700;
 }
 
@@ -736,10 +900,10 @@ th {
 
 .panelNotice {
   border: 1px dashed var(--line);
-  border-radius: 12px;
+  border-radius: 14px;
   padding: 12px;
   color: var(--muted);
-  background: rgba(255, 253, 250, 0.65);
+  background: rgba(255, 253, 250, 0.8);
 }
 
 .toast {
@@ -768,10 +932,11 @@ th {
 }
 
 .dataCard {
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: rgba(255, 253, 250, 0.85);
-  padding: 10px;
+  border: 1px solid rgba(17, 94, 89, 0.1);
+  border-radius: 18px;
+  background: rgba(255, 253, 250, 0.94);
+  padding: 14px;
+  box-shadow: 0 14px 24px rgba(31, 27, 22, 0.05);
 }
 
 .dataCardHead {
@@ -780,6 +945,16 @@ th {
   align-items: center;
   gap: 8px;
   margin-bottom: 6px;
+}
+
+.dataCardHead.attention strong,
+.dataCardHead.attention > *:last-child {
+  color: var(--warn);
+}
+
+.searchLegendRow {
+  margin-top: 0;
+  margin-bottom: 12px;
 }
 
 .dataCardHead > *:last-child {
@@ -1281,6 +1456,15 @@ th {
     flex-direction: column;
   }
 
+  .heroHeader {
+    gap: 14px;
+  }
+
+  .heroIntro,
+  .heroSnapshot {
+    width: 100%;
+  }
+
   .title {
     font-size: 1.5rem;
   }
@@ -1302,6 +1486,10 @@ th {
     grid-template-columns: 1fr;
   }
 
+  .searchPanelHead {
+    flex-direction: column;
+  }
+
   .searchAssistGrid {
     grid-template-columns: 1fr;
   }
@@ -1314,6 +1502,11 @@ th {
   .mobileQuickPanel .quickActionRow {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .workflowOptionRow {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .toolbarActions {
