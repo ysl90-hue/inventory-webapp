@@ -14,7 +14,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     date: "2026-05-24",
     summary: "상단 헤더 브랜드 문구를 변경했습니다.",
     items: [
-      "상단 헤더의 Inventory workflow 문구를 SAMYANG KRONES로 변경했습니다.",
+      "상단 헤더의 Inventory workflow 문구를 SAMYANG으로 변경했습니다.",
     ],
   },
   {
