@@ -6,9 +6,17 @@ export type ReleaseNote = {
 };
 
 export const RELEASE_NOTES_FORCE_OPEN_KEY = "inventory_release_notes_force_open_version";
-export const APP_VERSION = "v1.6.0";
+export const APP_VERSION = "v1.6.1";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
+  {
+    version: "v1.6.1",
+    date: "2026-05-24",
+    summary: "검색 전에 구분이나 위치만 선택해서 바로 품목 목록을 볼 수 있도록 검색 흐름을 보강했습니다.",
+    items: [
+      "검색어를 입력하지 않아도 구분 또는 위치만 눌러 해당 품목 목록을 바로 확인할 수 있습니다.",
+    ],
+  },
   {
     version: "v1.6.0",
     date: "2026-05-02",

@@ -1163,11 +1163,15 @@ export default function ManagementPage() {
 
   const filteredParts = useMemo(() => {
     const keyword = search.trim().toLowerCase();
-    if (keyword.length === 0) {
+    const hasAssistFilter = searchCategoryFilter !== "ALL" || searchPositionFilter !== "ALL";
+    if (keyword.length === 0 && !hasAssistFilter) {
       return [];
     }
     const filtered = parts.filter((part) => {
-      const hit = matchesPartSearch(part, keyword, searchField) || (searchField === "all" && (part.is_b_grade ? "b급" : "").includes(keyword));
+      const hit =
+        keyword.length === 0
+          ? true
+          : matchesPartSearch(part, keyword, searchField) || (searchField === "all" && (part.is_b_grade ? "b급" : "").includes(keyword));
       const categoryMatch = searchCategoryFilter === "ALL" || (part.location || "미분류") === searchCategoryFilter;
       const positionMatch = searchPositionFilter === "ALL" || ((part.position || "미지정").toUpperCase() || "미지정") === searchPositionFilter;
       return hit && categoryMatch && positionMatch && (!showLowOnly || isPartLow(part, minimumStockValue));
@@ -1181,6 +1185,7 @@ export default function ManagementPage() {
     });
     return filtered;
   }, [minimumStockValue, parts, partsSort, search, searchCategoryFilter, searchField, searchPositionFilter, showLowOnly]);
+  const hasSearchAssistSelection = searchCategoryFilter !== "ALL" || searchPositionFilter !== "ALL";
   const searchCategoryOptions = useMemo(() => {
     const counts = new Map<string, number>();
     for (const part of parts) {
@@ -2292,11 +2297,19 @@ export default function ManagementPage() {
             </div>
           </section>
 
-          {search.trim().length > 0 ? (
+          {search.trim().length > 0 || hasSearchAssistSelection ? (
             <section className="panel quickStatsPanel">
               <div className="quickStatCard">
-                <div className="meta">검색어</div>
-                <strong>{search}</strong>
+                <div className="meta">{search.trim().length > 0 ? "검색어" : "현재 보기"}</div>
+                <strong>
+                  {search.trim().length > 0
+                    ? search
+                    : searchCategoryFilter !== "ALL"
+                      ? `구분 ${searchCategoryFilter}`
+                      : searchPositionFilter !== "ALL"
+                        ? `위치 ${searchPositionFilter}`
+                        : "전체"}
+                </strong>
               </div>
               <div className="quickStatCard">
                 <div className="meta">검색 결과</div>
@@ -2309,66 +2322,68 @@ export default function ManagementPage() {
             </section>
           ) : null}
 
-          {search.trim().length > 0 ? (
-            <section className="panel" style={{ marginBottom: 14 }}>
-              <div className="adminHeaderRow">
-                <h2 style={{ margin: 0 }}>결과 보조 필터</h2>
-                <div className="meta">검색 결과를 구분과 위치로 다시 좁힐 수 있습니다.</div>
+          <section className="panel" style={{ marginBottom: 14 }}>
+            <div className="adminHeaderRow">
+              <h2 style={{ margin: 0 }}>{search.trim().length > 0 ? "결과 보조 필터" : "구분/위치 바로 보기"}</h2>
+              <div className="meta">
+                {search.trim().length > 0
+                  ? "검색 결과를 구분과 위치로 다시 좁힐 수 있습니다."
+                  : "검색어 없이도 구분이나 위치만 눌러 해당 품목 목록을 바로 볼 수 있습니다."}
               </div>
-              <div className="searchAssistGrid">
-                <div>
-                  <div className="meta" style={{ marginBottom: 8 }}>구분</div>
-                  <div className="filterChips">
-                    <button className={`btn secondary small ${searchCategoryFilter === "ALL" ? "activeChoice" : ""}`} type="button" onClick={() => setSearchCategoryFilter("ALL")}>
-                      전체
-                    </button>
-                    {searchCategoryOptions.map(([name, count]) => (
-                      <button
-                        key={name}
-                        className={`btn secondary small ${searchCategoryFilter === name ? "activeChoice" : ""}`}
-                        type="button"
-                        onClick={() => setSearchCategoryFilter(name)}
-                      >
-                        {name} {count}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <div className="meta" style={{ marginBottom: 8 }}>위치</div>
-                  <div className="filterChips">
-                    <button className={`btn secondary small ${searchPositionFilter === "ALL" ? "activeChoice" : ""}`} type="button" onClick={() => setSearchPositionFilter("ALL")}>
-                      전체
-                    </button>
-                    {searchPositionOptions.slice(0, 10).map(([code, count]) => (
-                      <button
-                        key={code}
-                        className={`btn secondary small ${searchPositionFilter === code ? "activeChoice" : ""}`}
-                        type="button"
-                        onClick={() => setSearchPositionFilter(code)}
-                      >
-                        {code} {count}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div className="formRow" style={{ marginTop: 12, marginBottom: 0 }}>
-                <div className="meta">결과 묶음 보기</div>
+            </div>
+            <div className="searchAssistGrid">
+              <div>
+                <div className="meta" style={{ marginBottom: 8 }}>구분</div>
                 <div className="filterChips">
-                  <button className={`btn secondary small ${searchGroupBy === "flat" ? "activeChoice" : ""}`} type="button" onClick={() => setSearchGroupBy("flat")}>
-                    일반 목록
+                  <button className={`btn secondary small ${searchCategoryFilter === "ALL" ? "activeChoice" : ""}`} type="button" onClick={() => setSearchCategoryFilter("ALL")}>
+                    전체
                   </button>
-                  <button className={`btn secondary small ${searchGroupBy === "category" ? "activeChoice" : ""}`} type="button" onClick={() => setSearchGroupBy("category")}>
-                    구분별 묶음
-                  </button>
-                  <button className={`btn secondary small ${searchGroupBy === "position" ? "activeChoice" : ""}`} type="button" onClick={() => setSearchGroupBy("position")}>
-                    위치별 묶음
-                  </button>
+                  {searchCategoryOptions.map(([name, count]) => (
+                    <button
+                      key={name}
+                      className={`btn secondary small ${searchCategoryFilter === name ? "activeChoice" : ""}`}
+                      type="button"
+                      onClick={() => setSearchCategoryFilter(name)}
+                    >
+                      {name} {count}
+                    </button>
+                  ))}
                 </div>
               </div>
-            </section>
-          ) : null}
+              <div>
+                <div className="meta" style={{ marginBottom: 8 }}>위치</div>
+                <div className="filterChips">
+                  <button className={`btn secondary small ${searchPositionFilter === "ALL" ? "activeChoice" : ""}`} type="button" onClick={() => setSearchPositionFilter("ALL")}>
+                    전체
+                  </button>
+                  {searchPositionOptions.slice(0, 10).map(([code, count]) => (
+                    <button
+                      key={code}
+                      className={`btn secondary small ${searchPositionFilter === code ? "activeChoice" : ""}`}
+                      type="button"
+                      onClick={() => setSearchPositionFilter(code)}
+                    >
+                      {code} {count}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="formRow" style={{ marginTop: 12, marginBottom: 0 }}>
+              <div className="meta">결과 묶음 보기</div>
+              <div className="filterChips">
+                <button className={`btn secondary small ${searchGroupBy === "flat" ? "activeChoice" : ""}`} type="button" onClick={() => setSearchGroupBy("flat")}>
+                  일반 목록
+                </button>
+                <button className={`btn secondary small ${searchGroupBy === "category" ? "activeChoice" : ""}`} type="button" onClick={() => setSearchGroupBy("category")}>
+                  구분별 묶음
+                </button>
+                <button className={`btn secondary small ${searchGroupBy === "position" ? "activeChoice" : ""}`} type="button" onClick={() => setSearchGroupBy("position")}>
+                  위치별 묶음
+                </button>
+              </div>
+            </div>
+          </section>
 
           <section className="panel">
             <div className="adminHeaderRow">
@@ -2446,10 +2461,10 @@ export default function ManagementPage() {
                     </div>
                   </section>
                 ))}
-                {!loading && search.trim().length === 0 ? (
-                  <div className="panelNotice">검색어를 입력하면 결과가 표시됩니다.</div>
+                {!loading && search.trim().length === 0 && !hasSearchAssistSelection ? (
+                  <div className="panelNotice">검색어를 입력하거나 구분/위치를 선택하면 결과가 표시됩니다.</div>
                 ) : null}
-                {!loading && search.trim().length > 0 && filteredParts.length === 0 ? (
+                {!loading && (search.trim().length > 0 || hasSearchAssistSelection) && filteredParts.length === 0 ? (
                   <div className="panelNotice">검색 결과가 없습니다.</div>
                 ) : null}
               </div>
@@ -2530,10 +2545,10 @@ export default function ManagementPage() {
                     </div>
                   </section>
                 ))}
-                {!loading && search.trim().length === 0 ? (
-                  <div className="panelNotice">검색어를 입력하면 결과가 표시됩니다.</div>
+                {!loading && search.trim().length === 0 && !hasSearchAssistSelection ? (
+                  <div className="panelNotice">검색어를 입력하거나 구분/위치를 선택하면 결과가 표시됩니다.</div>
                 ) : null}
-                {!loading && search.trim().length > 0 && filteredParts.length === 0 ? (
+                {!loading && (search.trim().length > 0 || hasSearchAssistSelection) && filteredParts.length === 0 ? (
                   <div className="panelNotice">검색 결과가 없습니다.</div>
                 ) : null}
               </div>
