@@ -2128,7 +2128,6 @@ export default function ManagementPage() {
         <div className="heroIntro">
           <div className="heroEyebrow">Inventory workflow</div>
           <h1 className="title heroTitle">6호기 파트 관리 프로그램</h1>
-          <p className="sub heroSub">검색, 입고/사용처리, 부족 재고 확인을 한 화면에서 더 빠르게 이어갈 수 있도록 정리된 운영 화면입니다.</p>
         </div>
         <section className="heroSnapshot panel">
           <div className="meta">오늘 작업 스냅샷</div>
@@ -2499,17 +2498,6 @@ export default function ManagementPage() {
                           <div>{minimumStockLabel || part.minimum_stock || "-"}</div>
                         </div>
                       </div>
-                      <div className="quickActionRow" style={{ marginTop: 10 }}>
-                        <button className="btn small" type="button" onClick={() => handleSearchQuickAction(part, "IN")}>
-                          입고
-                        </button>
-                        <button className="btn danger small" type="button" onClick={() => handleSearchQuickAction(part, "OUT")}>
-                          사용
-                        </button>
-                        <button className="btn secondary small" type="button" onClick={() => openPartHistory(part)}>
-                          이력
-                        </button>
-                      </div>
                       <div className="meta" style={{ marginTop: 8 }}>
                         최근 수정 {new Date(part.updated_at).toLocaleDateString("ko-KR")}
                       </div>
@@ -2556,7 +2544,6 @@ export default function ManagementPage() {
                       <th>재고</th>
                       <th>단위</th>
                       <th>위치</th>
-                      <th>빠른 작업</th>
                       {isAdmin ? <th>관리</th> : null}
                     </tr>
                   </thead>
@@ -2581,19 +2568,6 @@ export default function ManagementPage() {
                         </td>
                         <td>{part.unit_of_quantity || "-"}</td>
                         <td><LocationPreview position={part.position} description={locationInfo?.description} imageUrl={locationInfo?.image_url} /></td>
-                        <td>
-                          <div className="actions">
-                            <button className="btn small" type="button" onClick={() => handleSearchQuickAction(part, "IN")}>
-                              입고
-                            </button>
-                            <button className="btn danger small" type="button" onClick={() => handleSearchQuickAction(part, "OUT")}>
-                              사용
-                            </button>
-                            <button className="btn secondary small" type="button" onClick={() => openPartHistory(part)}>
-                              이력
-                            </button>
-                          </div>
-                        </td>
                         {isAdmin ? (
                           <td>
                             <div className="actions">

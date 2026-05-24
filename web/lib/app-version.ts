@@ -6,9 +6,18 @@ export type ReleaseNote = {
 };
 
 export const RELEASE_NOTES_FORCE_OPEN_KEY = "inventory_release_notes_force_open_version";
-export const APP_VERSION = "v1.7.1";
+export const APP_VERSION = "v1.7.2";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
+  {
+    version: "v1.7.2",
+    date: "2026-05-24",
+    summary: "중복되는 안내 문구와 검색 결과 작업 버튼을 정리했습니다.",
+    items: [
+      "상단 헤더에서 검색, 입고/사용처리, 부족 재고를 설명하던 문구를 제거했습니다.",
+      "검색 결과에서 품명 클릭과 재고 클릭으로 처리 가능한 동작과 겹치던 빠른 작업 열을 제거했습니다.",
+    ],
+  },
   {
     version: "v1.7.1",
     date: "2026-05-24",

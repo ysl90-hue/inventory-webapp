@@ -84,11 +84,6 @@ a {
   line-height: 1.02;
 }
 
-.heroSub {
-  max-width: 680px;
-  font-size: 0.98rem;
-}
-
 .heroSnapshot {
   width: min(280px, 100%);
   display: grid;
