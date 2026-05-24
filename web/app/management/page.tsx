@@ -1164,7 +1164,7 @@ export default function ManagementPage() {
 
   const filteredParts = useMemo(() => {
     const keyword = search.trim().toLowerCase();
-    const hasAssistFilter = searchCategoryFilter !== "ALL" || searchPositionFilter !== "ALL";
+    const hasAssistFilter = searchAssistOpen && (searchCategoryFilter !== "ALL" || searchPositionFilter !== "ALL");
     if (keyword.length === 0 && !hasAssistFilter) {
       return [];
     }
@@ -1173,8 +1173,8 @@ export default function ManagementPage() {
         keyword.length === 0
           ? true
           : matchesPartSearch(part, keyword, searchField) || (searchField === "all" && (part.is_b_grade ? "b급" : "").includes(keyword));
-      const categoryMatch = searchCategoryFilter === "ALL" || (part.location || "미분류") === searchCategoryFilter;
-      const positionMatch = searchPositionFilter === "ALL" || ((part.position || "미지정").toUpperCase() || "미지정") === searchPositionFilter;
+      const categoryMatch = !searchAssistOpen || searchCategoryFilter === "ALL" || (part.location || "미분류") === searchCategoryFilter;
+      const positionMatch = !searchAssistOpen || searchPositionFilter === "ALL" || ((part.position || "미지정").toUpperCase() || "미지정") === searchPositionFilter;
       return hit && categoryMatch && positionMatch && (!showLowOnly || isPartLow(part, minimumStockValue));
     });
 
@@ -1185,8 +1185,9 @@ export default function ManagementPage() {
       return a.item_number.localeCompare(b.item_number);
     });
     return filtered;
-  }, [minimumStockValue, parts, partsSort, search, searchCategoryFilter, searchField, searchPositionFilter, showLowOnly]);
+  }, [minimumStockValue, parts, partsSort, search, searchAssistOpen, searchCategoryFilter, searchField, searchPositionFilter, showLowOnly]);
   const hasSearchAssistSelection = searchCategoryFilter !== "ALL" || searchPositionFilter !== "ALL";
+  const hasActiveSearchAssistSelection = searchAssistOpen && hasSearchAssistSelection;
   const searchCategoryOptions = useMemo(() => {
     const counts = new Map<string, number>();
     for (const part of parts) {
@@ -1363,14 +1364,6 @@ export default function ManagementPage() {
     const timer = window.setTimeout(() => txQtyInputRef.current?.focus(), 140);
     return () => window.clearTimeout(timer);
   }, [activeTab, isMobileLayout, selectedPart]);
-
-  useEffect(() => {
-    if (search.trim().length > 0 || hasSearchAssistSelection) {
-      setSearchAssistOpen(true);
-      return;
-    }
-    setSearchAssistOpen(false);
-  }, [hasSearchAssistSelection, search]);
 
   function buildNextTxForm(options?: { partId?: string | null; itemNumber?: string; txType?: "IN" | "OUT" }) {
     return {
@@ -2275,10 +2268,8 @@ export default function ManagementPage() {
             <div className="toolbarSearch">
               <select className="select" value={searchField} onChange={(e) => setSearchField(e.target.value as PartSearchField)}>
                 <option value="all">전체</option>
-                <option value="category">구분</option>
                 <option value="designation">품목명</option>
                 <option value="itemNumber">파트번호</option>
-                <option value="position">위치</option>
               </select>
               <div className="inlineFieldRow">
                 <input
@@ -2329,16 +2320,16 @@ export default function ManagementPage() {
             </div>
           </section>
 
-          {search.trim().length > 0 || hasSearchAssistSelection ? (
+          {search.trim().length > 0 || hasActiveSearchAssistSelection ? (
             <section className="panel quickStatsPanel">
               <div className="quickStatCard">
                 <div className="meta">{search.trim().length > 0 ? "검색어" : "현재 보기"}</div>
                 <strong>
                   {search.trim().length > 0
                     ? search
-                    : searchCategoryFilter !== "ALL"
+                    : hasActiveSearchAssistSelection && searchCategoryFilter !== "ALL"
                       ? `구분 ${searchCategoryFilter}`
-                      : searchPositionFilter !== "ALL"
+                      : hasActiveSearchAssistSelection && searchPositionFilter !== "ALL"
                         ? `위치 ${searchPositionFilter}`
                         : "전체"}
                 </strong>
@@ -2360,8 +2351,8 @@ export default function ManagementPage() {
                 <h2 style={{ margin: 0 }}>{search.trim().length > 0 ? "결과 보조 필터" : "구분/위치로 검색"}</h2>
                 <div className="meta">
                   {search.trim().length > 0
-                    ? "검색 결과를 구분과 위치로 다시 좁힐 수 있습니다."
-                    : "검색어 없이도 구분이나 위치만 눌러 해당 품목 목록을 바로 볼 수 있습니다."}
+                    ? "펼친 상태에서만 검색 결과를 구분과 위치로 다시 좁힙니다."
+                    : "펼친 상태에서만 구분이나 위치 선택으로 품목 목록을 볼 수 있습니다."}
                 </div>
               </div>
               <button className="btn secondary small" type="button" onClick={() => setSearchAssistOpen((value) => !value)}>
@@ -2425,7 +2416,7 @@ export default function ManagementPage() {
               </>
             ) : (
               <div className="panelNotice" style={{ marginTop: 12 }}>
-                필요할 때 펼쳐서 구분이나 위치만 선택해 바로 품목을 볼 수 있습니다.
+                접힌 상태에서는 구분/위치 선택값이 검색 결과에 적용되지 않습니다.
               </div>
             )}
           </section>
@@ -2501,10 +2492,10 @@ export default function ManagementPage() {
                     </div>
                   </section>
                 ))}
-                {!loading && search.trim().length === 0 && !hasSearchAssistSelection ? (
+                {!loading && search.trim().length === 0 && !hasActiveSearchAssistSelection ? (
                   <div className="panelNotice">검색어를 입력하거나 구분/위치를 선택하면 결과가 표시됩니다.</div>
                 ) : null}
-                {!loading && (search.trim().length > 0 || hasSearchAssistSelection) && filteredParts.length === 0 ? (
+                {!loading && (search.trim().length > 0 || hasActiveSearchAssistSelection) && filteredParts.length === 0 ? (
                   <div className="panelNotice">검색 결과가 없습니다.</div>
                 ) : null}
               </div>
@@ -2571,10 +2562,10 @@ export default function ManagementPage() {
                     </div>
                   </section>
                 ))}
-                {!loading && search.trim().length === 0 && !hasSearchAssistSelection ? (
+                {!loading && search.trim().length === 0 && !hasActiveSearchAssistSelection ? (
                   <div className="panelNotice">검색어를 입력하거나 구분/위치를 선택하면 결과가 표시됩니다.</div>
                 ) : null}
-                {!loading && (search.trim().length > 0 || hasSearchAssistSelection) && filteredParts.length === 0 ? (
+                {!loading && (search.trim().length > 0 || hasActiveSearchAssistSelection) && filteredParts.length === 0 ? (
                   <div className="panelNotice">검색 결과가 없습니다.</div>
                 ) : null}
               </div>
