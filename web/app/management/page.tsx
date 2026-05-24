@@ -1365,10 +1365,12 @@ export default function ManagementPage() {
   }, [activeTab, isMobileLayout, selectedPart]);
 
   useEffect(() => {
-    if (hasSearchAssistSelection) {
+    if (search.trim().length > 0 || hasSearchAssistSelection) {
       setSearchAssistOpen(true);
+      return;
     }
-  }, [hasSearchAssistSelection]);
+    setSearchAssistOpen(false);
+  }, [hasSearchAssistSelection, search]);
 
   useEffect(() => {
     seenVersionRef.current = APP_VERSION;
