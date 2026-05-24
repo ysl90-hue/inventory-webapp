@@ -6,7 +6,7 @@ export type ReleaseNote = {
 };
 
 export const RELEASE_NOTES_FORCE_OPEN_KEY = "inventory_release_notes_force_open_version";
-export const APP_VERSION = "v1.7.0";
+export const APP_VERSION = "v1.6.3";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
