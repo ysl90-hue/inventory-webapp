@@ -247,34 +247,6 @@ a {
   border-bottom: 1px dashed #d8cebf;
 }
 
-.mobileQuickPanel {
-  display: grid;
-  gap: 10px;
-  margin-bottom: 12px;
-  padding: 14px;
-  border-radius: 18px;
-  border: 1px solid #d9efe7;
-  background: rgba(217, 239, 231, 0.4);
-}
-
-.workflowPanel {
-  border-color: rgba(17, 94, 89, 0.18);
-  background: linear-gradient(160deg, rgba(217, 239, 231, 0.52), rgba(255, 253, 250, 0.96));
-}
-
-.workflowOptionRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.mobileQuickMeta {
-  display: grid;
-  gap: 4px;
-}
-
 .modalToolbar {
   display: grid;
   grid-template-columns: 150px minmax(0, 1fr) 180px;
@@ -1484,16 +1456,6 @@ th {
   }
 
   .resultGroupHead {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .mobileQuickPanel .quickActionRow {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .workflowOptionRow {
     align-items: flex-start;
     flex-direction: column;
   }

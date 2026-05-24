@@ -6,9 +6,18 @@ export type ReleaseNote = {
 };
 
 export const RELEASE_NOTES_FORCE_OPEN_KEY = "inventory_release_notes_force_open_version";
-export const APP_VERSION = "v1.7.3";
+export const APP_VERSION = "v1.7.4";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
+  {
+    version: "v1.7.4",
+    date: "2026-05-24",
+    summary: "입고/사용처리 화면의 중복 빠른 패널을 제거했습니다.",
+    items: [
+      "입고/사용처리 상단의 품목 안내 패널과 스캔, 오늘 날짜, 선택 해제 버튼을 제거했습니다.",
+      "품목 선택, 스캔, 날짜 입력, 선택 해제 동작은 아래 상태 카드와 입력폼에서만 처리되도록 정리했습니다.",
+    ],
+  },
   {
     version: "v1.7.3",
     date: "2026-05-24",

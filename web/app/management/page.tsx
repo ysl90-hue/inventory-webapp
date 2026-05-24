@@ -2605,25 +2605,6 @@ export default function ManagementPage() {
               <h2 style={{ margin: 0 }}>입고/사용처리</h2>
               <span className={`statusPill ${txStatusTone}`}>{selectedPart ? "선택 완료" : matchedTxParts.length > 1 ? "선택 필요" : txForm.itemNumber.trim() ? "확인 필요" : "대기중"}</span>
             </div>
-            <div className="mobileQuickPanel workflowPanel">
-              <div className="mobileQuickMeta">
-                <strong>{selectedPart ? selectedPart.designation : "품목을 선택해 주세요"}</strong>
-                <span className="meta">{selectedPart ? `${selectedPart.item_number} / 재고 ${selectedPart.current_stock}` : "검색이나 스캔 후 바로 입력을 이어갈 수 있습니다."}</span>
-              </div>
-              <div className="quickActionRow">
-                <button className="btn secondary small" type="button" onClick={() => openScanner("tx")}>
-                  스캔
-                </button>
-                <button className="btn secondary small" type="button" onClick={() => setTxForm((prev) => ({ ...prev, txDate: formatDateInput() }))}>
-                  오늘 날짜
-                </button>
-                {selectedPart ? (
-                  <button className="btn secondary small" type="button" onClick={clearSelectedTxPart}>
-                    선택 해제
-                  </button>
-                ) : null}
-              </div>
-            </div>
             <div className={`selectionSummaryCard ${txStatusTone}`}>
               <div className="selectionSummaryHead">
                 <div>
