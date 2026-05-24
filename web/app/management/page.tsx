@@ -2128,21 +2128,6 @@ export default function ManagementPage() {
           <div className="heroEyebrow">Inventory workflow</div>
           <h1 className="title heroTitle">6호기 파트 관리 프로그램</h1>
         </div>
-        <section className="heroSnapshot panel">
-          <div className="meta">오늘 작업 스냅샷</div>
-          <strong className="heroSnapshotValue">{todayHistory.length}건</strong>
-          <div className="heroSnapshotGrid">
-            <div>
-              <span className="meta">입고</span>
-              <strong>{todayInQty}</strong>
-            </div>
-            <div>
-              <span className="meta">사용</span>
-              <strong>{todayOutQty}</strong>
-            </div>
-          </div>
-          <div className="meta">{latestHistoryActor ? `최근 작업자 ${latestHistoryActor.actor}` : "최근 작업 이력이 없습니다."}</div>
-        </section>
       </header>
 
       <section className="statsGrid spotlightStats" aria-label="요약 정보">

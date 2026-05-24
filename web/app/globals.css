@@ -84,40 +84,6 @@ a {
   line-height: 1.02;
 }
 
-.heroSnapshot {
-  width: min(280px, 100%);
-  display: grid;
-  gap: 12px;
-  align-content: start;
-  border-radius: 24px;
-  background: linear-gradient(160deg, rgba(15, 118, 110, 0.94), rgba(17, 94, 89, 0.96));
-  color: #f8fffd;
-  box-shadow: 0 20px 38px rgba(15, 118, 110, 0.24);
-}
-
-.heroSnapshot .meta {
-  color: rgba(248, 255, 253, 0.78);
-}
-
-.heroSnapshotValue {
-  font-size: 2.5rem;
-  line-height: 1;
-}
-
-.heroSnapshotGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.heroSnapshotGrid > div {
-  display: grid;
-  gap: 4px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.08);
-}
-
 .title {
   margin: 0;
   font-size: 2rem;
@@ -1421,8 +1387,7 @@ th {
     gap: 14px;
   }
 
-  .heroIntro,
-  .heroSnapshot {
+  .heroIntro {
     width: 100%;
   }
 

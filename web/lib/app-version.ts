@@ -6,9 +6,18 @@ export type ReleaseNote = {
 };
 
 export const RELEASE_NOTES_FORCE_OPEN_KEY = "inventory_release_notes_force_open_version";
-export const APP_VERSION = "v1.7.4";
+export const APP_VERSION = "v1.7.5";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
+  {
+    version: "v1.7.5",
+    date: "2026-05-24",
+    summary: "상단의 오늘 작업 스냅샷 중복 표시를 제거했습니다.",
+    items: [
+      "헤더의 오늘 작업 스냅샷 박스를 제거해 아래 요약 카드의 오늘 처리 정보와 겹치지 않도록 정리했습니다.",
+      "오늘 처리와 최근 상태 정보는 요약 카드 영역에서만 확인하도록 화면 흐름을 단순화했습니다.",
+    ],
+  },
   {
     version: "v1.7.4",
     date: "2026-05-24",
