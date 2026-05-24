@@ -2125,7 +2125,7 @@ export default function ManagementPage() {
     <main className="page">
       <header className="header heroHeader">
         <div className="heroIntro">
-          <div className="heroEyebrow">Inventory workflow</div>
+          <div className="heroEyebrow">SAMYANG KRONES</div>
           <h1 className="title heroTitle">6호기 파트 관리 프로그램</h1>
         </div>
       </header>

@@ -6,9 +6,17 @@ export type ReleaseNote = {
 };
 
 export const RELEASE_NOTES_FORCE_OPEN_KEY = "inventory_release_notes_force_open_version";
-export const APP_VERSION = "v1.7.5";
+export const APP_VERSION = "v1.7.6";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
+  {
+    version: "v1.7.6",
+    date: "2026-05-24",
+    summary: "상단 헤더 브랜드 문구를 변경했습니다.",
+    items: [
+      "상단 헤더의 Inventory workflow 문구를 SAMYANG KRONES로 변경했습니다.",
+    ],
+  },
   {
     version: "v1.7.5",
     date: "2026-05-24",
