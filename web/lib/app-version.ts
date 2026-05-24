@@ -6,9 +6,18 @@ export type ReleaseNote = {
 };
 
 export const RELEASE_NOTES_FORCE_OPEN_KEY = "inventory_release_notes_force_open_version";
-export const APP_VERSION = "v1.7.2";
+export const APP_VERSION = "v1.7.3";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
+  {
+    version: "v1.7.3",
+    date: "2026-05-24",
+    summary: "입고/사용처리의 날짜 유지 옵션을 제거했습니다.",
+    items: [
+      "입고/사용처리 화면에서 날짜 유지 체크박스를 제거했습니다.",
+      "처리 완료 후 다음 입력은 항상 오늘 날짜로 초기화되도록 정리했습니다.",
+    ],
+  },
   {
     version: "v1.7.2",
     date: "2026-05-24",

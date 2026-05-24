@@ -339,7 +339,6 @@ export default function ManagementPage() {
   const [searchGroupBy, setSearchGroupBy] = useState<"flat" | "category" | "position">("flat");
   const [searchAssistOpen, setSearchAssistOpen] = useState(false);
   const [showLowOnly, setShowLowOnly] = useState(false);
-  const [keepTxDate, setKeepTxDate] = useState(true);
   const [partsSort, setPartsSort] = useState<"item" | "stockAsc" | "stockDesc" | "designation">("item");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1377,7 +1376,7 @@ export default function ManagementPage() {
     return {
       ...createEmptyTxForm(),
       txType: options?.txType ?? txForm.txType,
-      txDate: keepTxDate ? txForm.txDate : formatDateInput(),
+      txDate: formatDateInput(),
       partId: options?.partId ?? null,
       itemNumber: options?.itemNumber ?? "",
     };
@@ -2623,13 +2622,6 @@ export default function ManagementPage() {
                     선택 해제
                   </button>
                 ) : null}
-              </div>
-              <div className="workflowOptionRow">
-                <label className="checkRow">
-                  <input type="checkbox" checked={keepTxDate} onChange={(e) => setKeepTxDate(e.target.checked)} />
-                  날짜 유지
-                </label>
-                <span className="meta">반복 입력 시 같은 날짜를 계속 사용합니다.</span>
               </div>
             </div>
             <div className={`selectionSummaryCard ${txStatusTone}`}>
