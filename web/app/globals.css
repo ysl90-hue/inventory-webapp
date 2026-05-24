@@ -89,12 +89,6 @@ a {
   font-size: 0.98rem;
 }
 
-.heroActionRow {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
 .heroSnapshot {
   width: min(280px, 100%);
   display: grid;

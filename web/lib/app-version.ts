@@ -6,15 +6,24 @@ export type ReleaseNote = {
 };
 
 export const RELEASE_NOTES_FORCE_OPEN_KEY = "inventory_release_notes_force_open_version";
-export const APP_VERSION = "v1.7.0";
+export const APP_VERSION = "v1.7.1";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
+  {
+    version: "v1.7.1",
+    date: "2026-05-24",
+    summary: "상단 헤더와 기존 작업 버튼의 중복을 정리했습니다.",
+    items: [
+      "상단 헤더에서 기존 검색, 입고/사용처리, 부족 재고 버튼과 기능이 겹치던 빠른 실행 버튼을 제거했습니다.",
+      "업데이트 내역 문구를 실제 화면 구성에 맞게 정리했습니다.",
+    ],
+  },
   {
     version: "v1.7.0",
     date: "2026-05-24",
     summary: "첫 화면 인상과 핵심 작업 흐름이 더 빠르고 눈에 들어오도록 UI를 크게 정리했습니다.",
     items: [
-      "상단을 오늘 작업 스냅샷과 빠른 실행 버튼이 보이는 대시보드형 헤더로 바꿨습니다.",
+      "상단을 오늘 작업 스냅샷이 보이는 대시보드형 헤더로 바꿨습니다.",
       "검색 화면에 빠른 검색 패널과 결과 범례를 추가하고, 부족 재고와 핵심 정보가 더 눈에 띄도록 강조했습니다.",
       "입고/사용처리 화면에 작업 패널과 날짜 유지 옵션을 추가해 반복 입력이 더 빠르게 이어지도록 정리했습니다.",
     ],

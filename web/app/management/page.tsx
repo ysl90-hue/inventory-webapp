@@ -2129,17 +2129,6 @@ export default function ManagementPage() {
           <div className="heroEyebrow">Inventory workflow</div>
           <h1 className="title heroTitle">6호기 파트 관리 프로그램</h1>
           <p className="sub heroSub">검색, 입고/사용처리, 부족 재고 확인을 한 화면에서 더 빠르게 이어갈 수 있도록 정리된 운영 화면입니다.</p>
-          <div className="heroActionRow">
-            <button className="btn" type="button" onClick={() => setActiveTab("stock")}>
-              바로 입출고
-            </button>
-            <button className="btn secondary" type="button" onClick={() => setActiveTab("search")}>
-              검색 시작
-            </button>
-            <button className="btn secondary" type="button" onClick={() => setLowStockModalOpen(true)}>
-              부족 재고 보기
-            </button>
-          </div>
         </div>
         <section className="heroSnapshot panel">
           <div className="meta">오늘 작업 스냅샷</div>
