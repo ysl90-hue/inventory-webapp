@@ -6,9 +6,18 @@ export type ReleaseNote = {
 };
 
 export const RELEASE_NOTES_FORCE_OPEN_KEY = "inventory_release_notes_force_open_version";
-export const APP_VERSION = "v1.7.6";
+export const APP_VERSION = "v1.7.7";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
+  {
+    version: "v1.7.7",
+    date: "2026-06-12",
+    summary: "최근 이력의 날짜 표시를 더 간단하게 정리했습니다.",
+    items: [
+      "최근 이력, 선택 품목 이력, 품목 이력 팝업에서 시간 표시를 제거하고 날짜만 보이도록 변경했습니다.",
+      "최근 이력 삭제 확인창의 기록 날짜도 시간 없이 표시되도록 맞췄습니다.",
+    ],
+  },
   {
     version: "v1.7.6",
     date: "2026-05-25",
