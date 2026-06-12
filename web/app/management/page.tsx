@@ -196,6 +196,10 @@ function formatDateInput(value?: string | Date) {
   return adjusted.toISOString().slice(0, 10);
 }
 
+function formatDisplayDate(value?: string | Date) {
+  return new Date(value || new Date()).toLocaleDateString("ko-KR");
+}
+
 function createEmptyTxForm(): TxForm {
   return {
     partId: null,
@@ -2784,7 +2788,7 @@ export default function ManagementPage() {
                   <div key={tx.id} className="historyMiniItem">
                     <div className="historyMiniHead">
                       <span className={`txBadge ${tx.tx_type === "OUT" ? "out" : "in"}`}>{formatTxTypeLabel(tx.tx_type)}</span>
-                      <strong>{new Date(tx.created_at).toLocaleString("ko-KR")}</strong>
+                      <strong>{formatDisplayDate(tx.created_at)}</strong>
                     </div>
                     <div>{formatTransactionSplitQty(tx)}</div>
                     <div className="meta">{tx.actor_name || "기록자 없음"} · {tx.is_b_grade ? "B급" : "정상품"}</div>
@@ -2873,7 +2877,7 @@ export default function ManagementPage() {
                       </div>
                       <div>
                         <span className="meta">날짜</span>
-                        <div>{new Date(tx.created_at).toLocaleString("ko-KR")}</div>
+                        <div>{formatDisplayDate(tx.created_at)}</div>
                       </div>
                       <div>
                         <span className="meta">메모</span>
@@ -2926,7 +2930,7 @@ export default function ManagementPage() {
                         <td>{tx.parts?.location || "-"}</td>
                         <td>{formatTransactionSplitQty(tx)}</td>
                         <td>{tx.memo || "-"}</td>
-                        <td>{new Date(tx.created_at).toLocaleString("ko-KR")}</td>
+                        <td>{formatDisplayDate(tx.created_at)}</td>
                         <td>{tx.actor_name || "-"} / {tx.is_b_grade ? "B급" : "정상품"}</td>
                         <td>
                           {tx.tx_type === "ADJUST" ? (
@@ -3646,7 +3650,7 @@ export default function ManagementPage() {
                       </div>
                       <div>
                         <span className="meta">날짜</span>
-                        <div>{new Date(tx.created_at).toLocaleString("ko-KR")}</div>
+                        <div>{formatDisplayDate(tx.created_at)}</div>
                       </div>
                       <div>
                         <span className="meta">메모</span>
@@ -3687,7 +3691,7 @@ export default function ManagementPage() {
                         <td>{tx.parts?.location || partHistoryModalPart.location || "-"}</td>
                         <td>{formatTransactionSplitQty(tx)}</td>
                         <td>{tx.memo || "-"}</td>
-                        <td>{new Date(tx.created_at).toLocaleString("ko-KR")}</td>
+                        <td>{formatDisplayDate(tx.created_at)}</td>
                         <td>{tx.actor_name || "-"} / {tx.is_b_grade ? "B급" : "정상품"}</td>
                       </tr>
                     ))}
@@ -4057,7 +4061,7 @@ export default function ManagementPage() {
                     {formatTxTypeLabel(txActionConfirm.tx.tx_type)} / 수량 {txActionConfirm.tx.qty} / {txActionConfirm.tx.is_b_grade ? "B급" : "정상품"}
                   </div>
                   <div className="meta" style={{ marginTop: 4 }}>
-                    기록 {new Date(txActionConfirm.tx.created_at).toLocaleString("ko-KR")} / {txActionConfirm.tx.actor_name || "기록자 없음"}
+                    기록 {formatDisplayDate(txActionConfirm.tx.created_at)} / {txActionConfirm.tx.actor_name || "기록자 없음"}
                   </div>
                   <div className="meta" style={{ marginTop: 6 }}>
                     삭제가 완료되면 이력 기록이 지워지고, 재고 수량도 원래 상태로 함께 원복됩니다.
