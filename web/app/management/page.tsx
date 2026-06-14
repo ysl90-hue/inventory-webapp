@@ -137,8 +137,8 @@ const HELP_SECTIONS = [
   {
     title: "검색 사용법",
     items: [
-      "검색창 앞에서 전체, 구분, 품목명, 파트번호, 위치 중 하나를 선택한 뒤 검색어를 입력합니다.",
-      "검색창에서도 바코드 스캔이 가능하며, 스캔값이 바로 검색어로 입력됩니다.",
+      "검색창 앞에서 전체, 품목명, 파트번호 중 하나를 선택한 뒤 검색어를 입력합니다.",
+      "검색창에서도 바코드/QR 스캔이 가능하며, 스캔값이 바로 검색어로 입력됩니다.",
       "검색 결과에는 품목번호, 품명, 메모, 재고, 단위, 위치가 표시됩니다.",
       "검색 결과에서 품명을 누르면 '입고/사용처리를 진행하시겠습니까?' 확인창이 뜨고, 확인하면 입고/사용처리 화면으로 이동합니다.",
       "검색 결과에서 재고 수량을 누르면 해당 품목만의 최근 이력을 팝업으로 바로 확인할 수 있습니다.",
@@ -177,13 +177,14 @@ const HELP_SECTIONS = [
       "구분 관리 팝업에서는 구분 추가, 수정, 삭제가 가능합니다.",
       "위치 관리 팝업에서는 위치코드, 설명, 사진 추가/수정/삭제가 가능합니다.",
       "입고 등록 파트 팝업의 수정 버튼을 누르면 팝업이 닫히고 품종등록 화면으로 이동합니다.",
+      "입고 등록된 전체 품목 팝업에서는 현재 목록을 QR 또는 바코드 A4 라벨로 인쇄할 수 있습니다.",
     ],
   },
   {
     title: "자주 확인할 점",
     items: [
       "변경사항이 보이지 않으면 브라우저 새로고침 또는 서버 재시작을 먼저 확인합니다.",
-      "바코드 스캔이 안 될 경우 브라우저의 카메라 권한 허용 여부와 초점 거리를 확인합니다.",
+      "바코드/QR 스캔이 안 될 경우 브라우저의 카메라 권한 허용 여부와 초점 거리를 확인합니다.",
       "품종등록이 되지 않은 품목은 입고/사용처리 저장이 되지 않습니다.",
       "같은 품목번호가 여러 개 등록된 경우에는 입고/사용처리 전에 정확한 품목을 선택해야 합니다.",
     ],
@@ -402,6 +403,38 @@ function Code39Barcode({ value }: { value: string }) {
   );
 }
 
+function QrCodeImage({ value }: { value: string }) {
+  const [src, setSrc] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function buildQrCode() {
+      const qrcode = await import("qrcode");
+      const dataUrl = await qrcode.toDataURL(value, {
+        errorCorrectionLevel: "M",
+        margin: 1,
+        width: 128,
+      });
+      if (!cancelled) {
+        setSrc(dataUrl);
+      }
+    }
+
+    void buildQrCode().catch(() => {
+      if (!cancelled) {
+        setSrc("");
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [value]);
+
+  return src ? <img className="qrCodeImage" src={src} alt={`${value} QR`} /> : <div className="qrCodeFallback">QR 생성 중</div>;
+}
+
 export default function ManagementPage() {
   const GLOBAL_MIN_STOCK_KEY = "inventory_global_min_stock";
   const router = useRouter();
@@ -457,6 +490,7 @@ export default function ManagementPage() {
   const [txHistoryFilter, setTxHistoryFilter] = useState<TxHistoryFilter>("ALL");
   const [txHistoryOnlySelectedPart, setTxHistoryOnlySelectedPart] = useState(false);
   const [labelPrintParts, setLabelPrintParts] = useState<Part[]>([]);
+  const [labelPrintMode, setLabelPrintMode] = useState<"qr" | "barcode">("qr");
 
   const [session, setSession] = useState<Session | null>(null);
   const [authRole, setAuthRole] = useState<"user" | "admin" | null>(null);
@@ -1087,7 +1121,7 @@ export default function ManagementPage() {
           detect: (source: ImageBitmapSource) => Promise<Array<{ rawValue?: string }>>;
         };
       }).BarcodeDetector;
-      const scannerFormats = ["code_128", "code_39", "ean_13", "ean_8", "upc_a", "upc_e"];
+      const scannerFormats = ["qr_code", "code_128", "code_39", "ean_13", "ean_8", "upc_a", "upc_e"];
       const isMobile = window.matchMedia("(max-width: 900px)").matches;
       const videoConstraints: MediaTrackConstraints = {
         facingMode: { ideal: "environment" },
@@ -1143,7 +1177,7 @@ export default function ManagementPage() {
           return;
         }
         scannerControlsRef.current = controls;
-        setScannerStatus(isMobile ? "바코드를 가까이 비추고 화면 중앙에 맞춰주세요." : "바코드를 화면 중앙에 맞춰주세요.");
+        setScannerStatus(isMobile ? "바코드나 QR을 가까이 비추고 화면 중앙에 맞춰주세요." : "바코드나 QR을 화면 중앙에 맞춰주세요.");
         window.setTimeout(detectTorchSupportFromVideo, 400);
       };
 
@@ -1166,7 +1200,7 @@ export default function ManagementPage() {
           video.srcObject = stream;
           await video.play();
           detectTorchSupportFromVideo();
-          setScannerStatus(isMobile ? "바코드를 가까이 비추고 화면 중앙에 맞춰주세요." : "바코드를 화면 중앙에 맞춰주세요.");
+          setScannerStatus(isMobile ? "바코드나 QR을 가까이 비추고 화면 중앙에 맞춰주세요." : "바코드나 QR을 화면 중앙에 맞춰주세요.");
 
           let lastScanAt = 0;
           const scanLoop = async () => {
@@ -1768,7 +1802,7 @@ export default function ManagementPage() {
   function rescanScannerValue() {
     setScannerPendingValue(null);
     setScannerError(null);
-    setScannerStatus("바코드를 다시 스캔해주세요.");
+    setScannerStatus("바코드나 QR을 다시 스캔해주세요.");
     setScannerOpen(false);
     window.setTimeout(() => setScannerOpen(true), 60);
   }
@@ -2379,7 +2413,7 @@ export default function ManagementPage() {
                   }}
                 />
                 <button className="btn secondary small" type="button" onClick={() => openScanner("search")}>
-                  바코드 스캔
+                  바코드/QR 스캔
                 </button>
               </div>
               <button className="btn" type="button" onClick={submitSearch}>
@@ -2724,7 +2758,7 @@ export default function ManagementPage() {
                 />
                 <div className="actions" style={{ marginTop: 8 }}>
                   <button className="btn secondary small" type="button" onClick={() => openScanner("tx")}>
-                    바코드 스캔
+                    바코드/QR 스캔
                   </button>
                 </div>
                 <div className={`fieldHint ${txStatusTone}`}>{txStatusMessage}</div>
@@ -3055,7 +3089,7 @@ export default function ManagementPage() {
               <div className="actions">
                 <div className="meta">{filteredInboundParts.length}건</div>
                 <button className="btn secondary small" type="button" disabled={filteredInboundParts.length === 0} onClick={() => openLabelPrint(filteredInboundParts)}>
-                  A4 바코드 인쇄
+                  A4 라벨 인쇄
                 </button>
                 <button className="btn secondary small" type="button" onClick={() => setStockModalOpen(false)}>
                   닫기
@@ -3350,14 +3384,20 @@ export default function ManagementPage() {
       ) : null}
 
       {labelPrintParts.length > 0 ? (
-        <div className="scannerOverlay labelPrintOverlay" role="dialog" aria-modal="true" aria-label="A4 바코드 라벨 인쇄">
+        <div className="scannerOverlay labelPrintOverlay" role="dialog" aria-modal="true" aria-label="A4 라벨 인쇄">
           <div className="scannerModal labelPrintModal">
             <div className="adminHeaderRow" style={{ marginBottom: 12 }}>
               <div>
-                <h2 style={{ margin: 0 }}>A4 바코드 라벨 인쇄</h2>
-                <div className="meta">현재 선택된 {labelPrintParts.length}개 품목을 A4 라벨로 출력합니다.</div>
+                <h2 style={{ margin: 0 }}>A4 라벨 인쇄</h2>
+                <div className="meta">현재 선택된 {labelPrintParts.length}개 품목을 {labelPrintMode === "qr" ? "QR" : "바코드"} 라벨로 출력합니다.</div>
               </div>
               <div className="actions noPrint">
+                <button className={`btn secondary small ${labelPrintMode === "qr" ? "activeChoice" : ""}`} type="button" onClick={() => setLabelPrintMode("qr")}>
+                  QR
+                </button>
+                <button className={`btn secondary small ${labelPrintMode === "barcode" ? "activeChoice" : ""}`} type="button" onClick={() => setLabelPrintMode("barcode")}>
+                  바코드
+                </button>
                 <button className="btn" type="button" onClick={printLabels}>
                   인쇄
                 </button>
@@ -3370,7 +3410,7 @@ export default function ManagementPage() {
               <div className="labelSheet">
                 {labelPrintParts.map((part) => (
                   <section key={part.id} className="labelCard">
-                    <Code39Barcode value={part.item_number} />
+                    {labelPrintMode === "qr" ? <QrCodeImage value={part.item_number} /> : <Code39Barcode value={part.item_number} />}
                     <strong className="labelItemNumber">{part.item_number}</strong>
                     <div className="labelDesignation">{part.designation}</div>
                     <div className="labelMeta">
@@ -3429,7 +3469,7 @@ export default function ManagementPage() {
                             placeholder="item number"
                           />
                           <button className="btn secondary small" type="button" onClick={() => openScanner("part")}>
-                            바코드 스캔
+                            바코드/QR 스캔
                           </button>
                         </div>
                         {matchedAdminParts.length > 0 ? (
@@ -4294,10 +4334,10 @@ export default function ManagementPage() {
       ) : null}
 
       {scannerOpen ? (
-        <div className="scannerOverlay" role="dialog" aria-modal="true" aria-label="바코드 스캔">
+        <div className="scannerOverlay" role="dialog" aria-modal="true" aria-label="바코드/QR 스캔">
           <div className="scannerModal">
             <div className="adminHeaderRow" style={{ marginBottom: 8 }}>
-              <h2 style={{ margin: 0 }}>바코드 스캔</h2>
+              <h2 style={{ margin: 0 }}>바코드/QR 스캔</h2>
               <div className="actions">
                 <button className="btn secondary small" type="button" onClick={() => void toggleScannerTorch()}>
                   {scannerTorchSupported ? (scannerTorchOn ? "손전등 끄기" : "손전등 켜기") : "손전등(미지원)"}
@@ -4308,7 +4348,7 @@ export default function ManagementPage() {
               </div>
             </div>
             <div className="scannerGuide">
-              {isMobileLayout ? "모바일: 바코드를 10~20cm 거리에서 천천히 맞춰주세요." : "PC: 카메라 앞 바코드를 중앙에 고정해주세요."}
+              {isMobileLayout ? "모바일: 바코드나 QR을 10~20cm 거리에서 천천히 맞춰주세요." : "PC: 카메라 앞 바코드나 QR을 중앙에 고정해주세요."}
             </div>
             <div className="scannerFrame">
               <video ref={scannerVideoRef} className="scannerVideo" muted playsInline />

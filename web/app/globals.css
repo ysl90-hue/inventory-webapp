@@ -1349,6 +1349,133 @@ th {
   border-radius: 0 0 12px 0;
 }
 
+.labelPrintModal {
+  width: min(1040px, calc(100vw - 32px));
+  max-height: 88vh;
+  overflow: auto;
+}
+
+.labelPrintArea {
+  display: grid;
+  justify-content: center;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: #eef2f1;
+}
+
+.labelSheet {
+  width: 194mm;
+  min-height: 281mm;
+  display: grid;
+  grid-template-columns: repeat(3, 63mm);
+  align-content: start;
+  gap: 2mm;
+  padding: 0;
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(31, 27, 22, 0.12);
+}
+
+.labelCard {
+  height: 33mm;
+  display: grid;
+  grid-template-rows: 1fr auto auto auto;
+  align-items: center;
+  justify-items: center;
+  gap: 1mm;
+  padding: 2.2mm;
+  border: 1px dashed #cfd8d5;
+  background: #fff;
+  color: #111827;
+  overflow: hidden;
+  break-inside: avoid;
+}
+
+.qrCodeImage,
+.qrCodeFallback {
+  width: 21mm;
+  height: 21mm;
+}
+
+.qrCodeFallback {
+  display: grid;
+  place-items: center;
+  border: 1px dashed #9ca3af;
+  color: #6b7280;
+  font-size: 8pt;
+}
+
+.code39Barcode {
+  height: 13mm;
+  max-width: 56mm;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.code39Char {
+  display: inline-flex;
+  height: 100%;
+}
+
+.code39Unit.bar {
+  background: #111827;
+}
+
+.code39Unit.space,
+.code39Gap {
+  background: transparent;
+}
+
+.code39Unit.narrow,
+.code39Gap {
+  width: 0.35mm;
+}
+
+.code39Unit.wide {
+  width: 1.05mm;
+}
+
+.barcodeUnsupported {
+  display: grid;
+  place-items: center;
+  width: 56mm;
+  height: 13mm;
+  border: 1px dashed #ef4444;
+  color: #991b1b;
+  font-size: 8pt;
+}
+
+.labelItemNumber {
+  max-width: 100%;
+  font-size: 10pt;
+  line-height: 1.1;
+  text-align: center;
+  word-break: break-all;
+}
+
+.labelDesignation {
+  max-width: 100%;
+  font-size: 8pt;
+  line-height: 1.15;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.labelMeta {
+  max-width: 100%;
+  color: #4b5563;
+  font-size: 7pt;
+  line-height: 1.1;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 @media (max-width: 900px) {
   body {
     background:
@@ -1553,5 +1680,46 @@ th {
   .input,
   .select {
     min-height: 44px;
+  }
+}
+
+@page {
+  size: A4;
+  margin: 8mm;
+}
+
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+
+  .labelPrintArea,
+  .labelPrintArea * {
+    visibility: visible !important;
+  }
+
+  .labelPrintArea {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: auto;
+    padding: 0;
+    border: none;
+    background: #fff;
+  }
+
+  .labelSheet {
+    width: auto;
+    min-height: auto;
+    grid-template-columns: repeat(3, 63mm);
+    gap: 2mm;
+    box-shadow: none;
+  }
+
+  .labelCard {
+    border-color: #d1d5db;
+  }
+
+  .noPrint {
+    display: none !important;
   }
 }
