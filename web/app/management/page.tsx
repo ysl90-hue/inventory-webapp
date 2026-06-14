@@ -491,6 +491,7 @@ export default function ManagementPage() {
   const [txHistoryOnlySelectedPart, setTxHistoryOnlySelectedPart] = useState(false);
   const [labelPrintParts, setLabelPrintParts] = useState<Part[]>([]);
   const [labelPrintMode, setLabelPrintMode] = useState<"qr" | "barcode">("qr");
+  const [selectedLabelPartIds, setSelectedLabelPartIds] = useState<Set<string>>(() => new Set());
 
   const [session, setSession] = useState<Session | null>(null);
   const [authRole, setAuthRole] = useState<"user" | "admin" | null>(null);
@@ -1340,6 +1341,12 @@ export default function ManagementPage() {
 
     return filtered;
   }, [inboundParts, stockModalSearch, stockModalSearchField, stockModalSort]);
+  const selectedLabelParts = useMemo(
+    () => filteredInboundParts.filter((part) => selectedLabelPartIds.has(part.id)),
+    [filteredInboundParts, selectedLabelPartIds],
+  );
+  const allFilteredLabelPartsSelected =
+    filteredInboundParts.length > 0 && filteredInboundParts.every((part) => selectedLabelPartIds.has(part.id));
   const recentTouchedPartIds = useMemo(() => {
     const ids = new Set<string>();
     for (const tx of txHistory.slice(0, 12)) {
@@ -1770,6 +1777,30 @@ export default function ManagementPage() {
 
   function openLabelPrint(partsToPrint: Part[]) {
     setLabelPrintParts(partsToPrint);
+  }
+
+  function toggleLabelPart(partId: string) {
+    setSelectedLabelPartIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(partId)) {
+        next.delete(partId);
+      } else {
+        next.add(partId);
+      }
+      return next;
+    });
+  }
+
+  function toggleAllFilteredLabelParts() {
+    setSelectedLabelPartIds((prev) => {
+      const next = new Set(prev);
+      if (filteredInboundParts.length > 0 && filteredInboundParts.every((part) => next.has(part.id))) {
+        filteredInboundParts.forEach((part) => next.delete(part.id));
+      } else {
+        filteredInboundParts.forEach((part) => next.add(part.id));
+      }
+      return next;
+    });
   }
 
   function printLabels() {
@@ -3087,9 +3118,12 @@ export default function ManagementPage() {
             <div className="adminHeaderRow" style={{ marginBottom: 8 }}>
               <h2 style={{ margin: 0 }}>입고 등록된 전체 품목</h2>
               <div className="actions">
-                <div className="meta">{filteredInboundParts.length}건</div>
-                <button className="btn secondary small" type="button" disabled={filteredInboundParts.length === 0} onClick={() => openLabelPrint(filteredInboundParts)}>
-                  A4 라벨 인쇄
+                <div className="meta">{filteredInboundParts.length}건 / 선택 {selectedLabelParts.length}건</div>
+                <button className="btn secondary small" type="button" disabled={selectedLabelParts.length === 0} onClick={() => openLabelPrint(selectedLabelParts)}>
+                  선택 품목 라벨 인쇄
+                </button>
+                <button className="btn secondary small" type="button" disabled={selectedLabelPartIds.size === 0} onClick={() => setSelectedLabelPartIds(new Set())}>
+                  선택 해제
                 </button>
                 <button className="btn secondary small" type="button" onClick={() => setStockModalOpen(false)}>
                   닫기
@@ -3118,6 +3152,13 @@ export default function ManagementPage() {
                 <option value="stockAsc">재고적은순</option>
               </select>
             </div>
+            <div className="labelSelectBar">
+              <label className="checkRow">
+                <input type="checkbox" checked={allFilteredLabelPartsSelected} onChange={toggleAllFilteredLabelParts} />
+                현재 목록 전체 선택
+              </label>
+              <span className="meta">체크한 품목만 QR/바코드 라벨로 인쇄됩니다.</span>
+            </div>
             <section className="quickStatsPanel" style={{ marginBottom: 12 }}>
               <div className="quickStatCard">
                 <div className="meta">전체 품목</div>
@@ -3141,7 +3182,10 @@ export default function ManagementPage() {
                   return (
                   <article key={part.id} className="dataCard">
                     <div className="dataCardHead">
-                      <strong>{part.location || "구분 없음"}</strong>
+                      <label className="checkRow">
+                        <input type="checkbox" checked={selectedLabelPartIds.has(part.id)} onChange={() => toggleLabelPart(part.id)} />
+                        <strong>{part.location || "구분 없음"}</strong>
+                      </label>
                       <span>{formatSplitStock(part)}</span>
                     </div>
                     <div>{part.item_number}</div>
@@ -3193,6 +3237,7 @@ export default function ManagementPage() {
                 <table className="historyTable">
                   <thead>
                     <tr>
+                      <th>선택</th>
                       <th>구분</th>
                       <th>품목번호</th>
                       <th>품명</th>
@@ -3209,7 +3254,15 @@ export default function ManagementPage() {
                       const isRecent = recentTouchedPartIds.has(part.id);
                       const isLow = isPartLow(part, minimumStockValue);
                       return (
-                      <tr key={part.id}>
+                    <tr key={part.id}>
+                        <td>
+                          <input
+                            aria-label={`${part.item_number} 라벨 선택`}
+                            type="checkbox"
+                            checked={selectedLabelPartIds.has(part.id)}
+                            onChange={() => toggleLabelPart(part.id)}
+                          />
+                        </td>
                         <td>{part.location || "-"}</td>
                         <td>{part.item_number}</td>
                         <td>
@@ -3254,7 +3307,7 @@ export default function ManagementPage() {
                     )})}
                     {!loading && filteredInboundParts.length === 0 ? (
                       <tr>
-                        <td colSpan={isAdmin ? 8 : 7}>조건에 맞는 입고 등록 품목이 없습니다.</td>
+                        <td colSpan={isAdmin ? 9 : 8}>조건에 맞는 입고 등록 품목이 없습니다.</td>
                       </tr>
                     ) : null}
                   </tbody>
@@ -3413,9 +3466,6 @@ export default function ManagementPage() {
                     {labelPrintMode === "qr" ? <QrCodeImage value={part.item_number} /> : <Code39Barcode value={part.item_number} />}
                     <strong className="labelItemNumber">{part.item_number}</strong>
                     <div className="labelDesignation">{part.designation}</div>
-                    <div className="labelMeta">
-                      {(part.location || "구분 없음") + " / " + (part.position || "위치 없음")}
-                    </div>
                   </section>
                 ))}
               </div>

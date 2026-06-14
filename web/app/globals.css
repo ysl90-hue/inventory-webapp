@@ -220,6 +220,19 @@ a {
   margin-bottom: 12px;
 }
 
+.labelSelectBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #d9efe7;
+  background: rgba(217, 239, 231, 0.36);
+}
+
 .textTrigger {
   padding: 0;
   border: 0;
@@ -1379,7 +1392,7 @@ th {
 .labelCard {
   height: 33mm;
   display: grid;
-  grid-template-rows: 1fr auto auto auto;
+  grid-template-rows: 1fr auto auto;
   align-items: center;
   justify-items: center;
   gap: 1mm;
@@ -1459,17 +1472,6 @@ th {
   max-width: 100%;
   font-size: 8pt;
   line-height: 1.15;
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.labelMeta {
-  max-width: 100%;
-  color: #4b5563;
-  font-size: 7pt;
-  line-height: 1.1;
   text-align: center;
   white-space: nowrap;
   overflow: hidden;
