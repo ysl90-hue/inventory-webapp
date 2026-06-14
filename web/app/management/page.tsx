@@ -327,6 +327,81 @@ function LocationPreview({
   );
 }
 
+const CODE39_PATTERNS: Record<string, string> = {
+  "0": "nnnwwnwnn",
+  "1": "wnnwnnnnw",
+  "2": "nnwwnnnnw",
+  "3": "wnwwnnnnn",
+  "4": "nnnwwnnnw",
+  "5": "wnnwwnnnn",
+  "6": "nnwwwnnnn",
+  "7": "nnnwnnwnw",
+  "8": "wnnwnnwnn",
+  "9": "nnwwnnwnn",
+  A: "wnnnnwnnw",
+  B: "nnwnnwnnw",
+  C: "wnwnnwnnn",
+  D: "nnnnwwnnw",
+  E: "wnnnwwnnn",
+  F: "nnwnwwnnn",
+  G: "nnnnnwwnw",
+  H: "wnnnnwwnn",
+  I: "nnwnnwwnn",
+  J: "nnnnwwwnn",
+  K: "wnnnnnnww",
+  L: "nnwnnnnww",
+  M: "wnwnnnnwn",
+  N: "nnnnwnnww",
+  O: "wnnnwnnwn",
+  P: "nnwnwnnwn",
+  Q: "nnnnnnwww",
+  R: "wnnnnnwwn",
+  S: "nnwnnnwwn",
+  T: "nnnnwnwwn",
+  U: "wwnnnnnnw",
+  V: "nwwnnnnnw",
+  W: "wwwnnnnnn",
+  X: "nwnnwnnnw",
+  Y: "wwnnwnnnn",
+  Z: "nwwnwnnnn",
+  "-": "nwnnnnwnw",
+  ".": "wwnnnnwnn",
+  " ": "nwwnnnwnn",
+  "$": "nwnwnwnnn",
+  "/": "nwnwnnnwn",
+  "+": "nwnnnwnwn",
+  "%": "nnnwnwnwn",
+  "*": "nwnnwnwnn",
+};
+
+function getCode39Value(value: string) {
+  const normalized = value.trim().toUpperCase();
+  return /^[0-9A-Z .$/+%-]+$/.test(normalized) ? normalized : null;
+}
+
+function Code39Barcode({ value }: { value: string }) {
+  const codeValue = getCode39Value(value);
+  if (!codeValue) {
+    return <div className="barcodeUnsupported">CODE39 지원 문자가 아닙니다.</div>;
+  }
+
+  return (
+    <div className="code39Barcode" aria-label={`바코드 ${codeValue}`}>
+      {`*${codeValue}*`.split("").map((char, charIndex) => (
+        <span key={`${char}-${charIndex}`} className="code39Char">
+          {CODE39_PATTERNS[char].split("").map((unit, unitIndex) => (
+            <span
+              key={`${char}-${charIndex}-${unitIndex}`}
+              className={`code39Unit ${unit === "w" ? "wide" : "narrow"} ${unitIndex % 2 === 0 ? "bar" : "space"}`}
+            />
+          ))}
+          <span className="code39Gap" />
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export default function ManagementPage() {
   const GLOBAL_MIN_STOCK_KEY = "inventory_global_min_stock";
   const router = useRouter();
@@ -381,6 +456,7 @@ export default function ManagementPage() {
   const [txHistorySearch, setTxHistorySearch] = useState("");
   const [txHistoryFilter, setTxHistoryFilter] = useState<TxHistoryFilter>("ALL");
   const [txHistoryOnlySelectedPart, setTxHistoryOnlySelectedPart] = useState(false);
+  const [labelPrintParts, setLabelPrintParts] = useState<Part[]>([]);
 
   const [session, setSession] = useState<Session | null>(null);
   const [authRole, setAuthRole] = useState<"user" | "admin" | null>(null);
@@ -1656,6 +1732,14 @@ export default function ManagementPage() {
     setScannerPendingValue(null);
     setScannerTarget(target);
     setScannerOpen(true);
+  }
+
+  function openLabelPrint(partsToPrint: Part[]) {
+    setLabelPrintParts(partsToPrint);
+  }
+
+  function printLabels() {
+    window.print();
   }
 
   function applyScannerPendingValue() {
@@ -2970,6 +3054,9 @@ export default function ManagementPage() {
               <h2 style={{ margin: 0 }}>입고 등록된 전체 품목</h2>
               <div className="actions">
                 <div className="meta">{filteredInboundParts.length}건</div>
+                <button className="btn secondary small" type="button" disabled={filteredInboundParts.length === 0} onClick={() => openLabelPrint(filteredInboundParts)}>
+                  A4 바코드 인쇄
+                </button>
                 <button className="btn secondary small" type="button" onClick={() => setStockModalOpen(false)}>
                   닫기
                 </button>
@@ -3258,6 +3345,41 @@ export default function ManagementPage() {
                 </table>
               </div>
             )}
+          </div>
+        </div>
+      ) : null}
+
+      {labelPrintParts.length > 0 ? (
+        <div className="scannerOverlay labelPrintOverlay" role="dialog" aria-modal="true" aria-label="A4 바코드 라벨 인쇄">
+          <div className="scannerModal labelPrintModal">
+            <div className="adminHeaderRow" style={{ marginBottom: 12 }}>
+              <div>
+                <h2 style={{ margin: 0 }}>A4 바코드 라벨 인쇄</h2>
+                <div className="meta">현재 선택된 {labelPrintParts.length}개 품목을 A4 라벨로 출력합니다.</div>
+              </div>
+              <div className="actions noPrint">
+                <button className="btn" type="button" onClick={printLabels}>
+                  인쇄
+                </button>
+                <button className="btn secondary small" type="button" onClick={() => setLabelPrintParts([])}>
+                  닫기
+                </button>
+              </div>
+            </div>
+            <div className="labelPrintArea">
+              <div className="labelSheet">
+                {labelPrintParts.map((part) => (
+                  <section key={part.id} className="labelCard">
+                    <Code39Barcode value={part.item_number} />
+                    <strong className="labelItemNumber">{part.item_number}</strong>
+                    <div className="labelDesignation">{part.designation}</div>
+                    <div className="labelMeta">
+                      {(part.location || "구분 없음") + " / " + (part.position || "위치 없음")}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       ) : null}
