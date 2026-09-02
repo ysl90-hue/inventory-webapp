@@ -10,8 +10,10 @@ import { canUseCurrentSession, clearCurrentSessionMarker, getShouldKeepLogin } f
 import { normalizeCategory, normalizeUnit, UNIT_OPTIONS } from "@/lib/inventory";
 import type { Part, PartCategory, PartLocation, StockTransaction } from "@/lib/types";
 
-type ActiveTab = "search" | "stock" | "admin";
+type ActiveTab = "inventory" | "admin";
 type TxHistoryFilter = "ALL" | "IN" | "OUT" | "ADJUST";
+type TxHistoryGradeFilter = "ALL" | "NORMAL" | "B_GRADE";
+type TxHistoryPeriod = "TODAY" | "7D" | "30D" | "3M" | "ALL" | "CUSTOM";
 
 type TxForm = {
   partId: string | null;
@@ -61,15 +63,6 @@ type TxEditForm = {
   isBGrade: boolean;
 };
 
-type BGradeUsagePrompt = {
-  partId: string;
-  designation: string;
-  itemNumber: string;
-  category: string | null;
-  position: string | null;
-  qty: number;
-};
-
 type TxActionConfirm =
   | {
       kind: "edit";
@@ -85,23 +78,42 @@ type TxActionResult = {
   message: string;
 };
 
-type TxSubmitConfirm = {
+type TxBasketItem = {
+  id: string;
   part: Part;
-  qty: number;
-  createdAt: string;
-  memo: string;
   txType: "IN" | "OUT";
+  qty: string;
+  memo: string;
   isBGrade: boolean;
-  isLargeQty: boolean;
+  reclassifyToBGrade: boolean;
 };
 
-type TxSubmitResult = {
+type StockSubmitPayload = {
   part: Part;
   txType: "IN" | "OUT";
   qty: number;
+  memo: string;
+  createdAt: string;
   isBGrade: boolean;
-  reclassifiedToBGrade: boolean;
+  reclassifyToBGrade: boolean;
 };
+
+type StockSubmitResponse =
+  | { ok: true; reclassifiedToBGrade: boolean }
+  | { ok: false; error: string };
+
+type TxBasketResultItem = {
+  item: TxBasketItem;
+  status: "success" | "failed" | "skipped";
+  message: string;
+};
+
+type TxBasketResult = {
+  txType: "IN" | "OUT";
+  results: TxBasketResultItem[];
+};
+
+const TX_HISTORY_PAGE_SIZE = 100;
 
 const HELP_SECTIONS = [
   {
@@ -117,8 +129,8 @@ const HELP_SECTIONS = [
   {
     title: "메뉴 안내",
     items: [
-      "검색: 등록된 품목을 조건별로 검색하고 재고, 메모, 위치를 확인하는 화면입니다.",
-      "입고/사용처리: 선택한 품목을 기준으로 입고 또는 사용을 저장하는 화면입니다.",
+      "재고관리: 등록된 품목을 검색하고, 선택한 품목을 입고 또는 사용 처리하며 작업 바구니에 담는 화면입니다.",
+      "입출고 이력: 최근 입고/사용 내역을 검색하고 수정 또는 삭제할 수 있는 큰 팝업입니다.",
       "상단 입고 등록된 품목 수치를 누르면 품종등록된 전체 품목을 팝업으로 확인하고 검색하거나 정렬할 수 있습니다.",
       "품종등록: 신규 품목 등록, 기존 품목 수정, 구분 관리, 위치 관리를 진행하는 화면입니다.",
     ],
@@ -140,28 +152,28 @@ const HELP_SECTIONS = [
       "검색창 앞에서 전체, 품목명, 파트번호 중 하나를 선택한 뒤 검색어를 입력합니다.",
       "검색창에서도 바코드/QR 스캔이 가능하며, 스캔값이 바로 검색어로 입력됩니다.",
       "검색 결과에는 품목번호, 품명, 메모, 재고, 단위, 위치가 표시됩니다.",
-      "검색 결과에서 품명을 누르면 '입고/사용처리를 진행하시겠습니까?' 확인창이 뜨고, 확인하면 입고/사용처리 화면으로 이동합니다.",
-      "검색 결과에서 재고 수량을 누르면 해당 품목만의 최근 이력을 팝업으로 바로 확인할 수 있습니다.",
+      "검색 결과에서 선택 버튼을 누르면 해당 품목이 작업 바구니에 바로 담깁니다.",
+      "검색 결과에서 재고 수량을 누르면 입출고 이력 팝업이 열리고 해당 품목의 최근 이력을 확인할 수 있습니다.",
       "검색 결과가 없으면 검색 조건을 전체로 바꿔 다시 검색해 보는 것이 좋습니다.",
     ],
   },
   {
-    title: "입고/사용처리",
+    title: "입출고 처리",
     items: [
-      "입고/사용처리는 선택한 품목 기준으로 진행합니다.",
-      "검색 결과에서 품명을 눌러 넘어오거나, 품목번호를 입력해 후보가 하나로 정해지면 해당 품목으로 처리할 수 있습니다.",
-      "같은 품목번호가 여러 개 있으면 후보 목록이 표시되므로, 구분과 위치를 보고 정확한 품목을 선택해야 합니다.",
-      "입고/사용 구분, 수량, 날짜, 메모, B급 여부를 입력한 뒤 저장합니다.",
-      "입고일 때 수량 옆의 B급을 체크하면 해당 수량이 B급 재고로 바로 입고됩니다.",
-      "일반 사용 처리 중 필요한 경우 'B급으로 분류하시겠습니까?' 팝업에서 승인해 같은 수량을 B급 입고로 자동 전환할 수 있습니다.",
+      "입출고 처리는 재고관리 화면의 작업 바구니 기준으로 진행합니다.",
+      "재고관리 검색 결과에서 선택 버튼을 눌러 품목을 작업 바구니에 담은 뒤 수량과 재고 등급을 조정합니다.",
+      "작업 바구니가 비어 있을 때 입고 또는 사용 작업 유형을 먼저 선택할 수 있습니다.",
+      "작업 날짜와 공통 메모는 바구니 상단에서 한 번만 입력하고, 품목별 메모는 각 행에서 추가할 수 있습니다.",
+      "입고일 때 B급을 선택하면 해당 수량이 B급 재고로 바로 입고됩니다.",
+      "일반 사용 처리 중 필요한 경우 최종 확인 화면에서 B급 재분류를 선택해 같은 수량을 B급 입고로 자동 전환할 수 있습니다.",
       "사용 수량이 현재 재고보다 많으면 저장되지 않습니다.",
     ],
   },
   {
-    title: "최근 이력",
+    title: "입출고 이력",
     items: [
       "최근 이력에서는 입고/사용 내역의 구분, 품목번호, 품명, 메모, 날짜, 사용자명을 확인할 수 있습니다.",
-      "검색 화면에서는 재고 수량을 눌러 해당 품목만의 최근 이력을 팝업으로 따로 볼 수 있습니다.",
+      "재고관리 화면에서는 재고 수량을 눌러 입출고 이력 팝업에서 해당 품목의 최근 이력을 따로 볼 수 있습니다.",
       "최근 이력 수정에서는 수량, 메모, B급 여부뿐 아니라 날짜도 변경할 수 있습니다.",
       "수정은 로그인한 사용자도 가능하지만, 삭제는 관리자만 가능합니다.",
       "보정 이력(ADJUST)은 수정하거나 삭제할 수 없습니다.",
@@ -449,13 +461,14 @@ export default function ManagementPage() {
   const [searchCategoryFilter, setSearchCategoryFilter] = useState<string>("ALL");
   const [searchPositionFilter, setSearchPositionFilter] = useState<string>("ALL");
   const [searchGroupBy, setSearchGroupBy] = useState<"flat" | "category" | "position">("flat");
-  const [searchAssistOpen, setSearchAssistOpen] = useState(false);
+  const [searchAssistOpen, setSearchAssistOpen] = useState(true);
+  const [quickSearchOpen, setQuickSearchOpen] = useState(false);
   const [showLowOnly, setShowLowOnly] = useState(false);
   const [partsSort, setPartsSort] = useState<"item" | "stockAsc" | "stockDesc" | "designation">("item");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successToast, setSuccessToast] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<ActiveTab>("search");
+  const [activeTab, setActiveTab] = useState<ActiveTab>("inventory");
   const [stockModalOpen, setStockModalOpen] = useState(false);
   const [lowStockModalOpen, setLowStockModalOpen] = useState(false);
   const [stockModalSearch, setStockModalSearch] = useState("");
@@ -477,18 +490,27 @@ export default function ManagementPage() {
   const [deletingLocationId, setDeletingLocationId] = useState<string | null>(null);
   const [categoryOptionsOpen, setCategoryOptionsOpen] = useState(false);
   const [locationOptionsOpen, setLocationOptionsOpen] = useState(false);
-  const [stockConfirmPart, setStockConfirmPart] = useState<Part | null>(null);
-  const [bGradeUsagePrompt, setBGradeUsagePrompt] = useState<BGradeUsagePrompt | null>(null);
-  const [partHistoryModalPart, setPartHistoryModalPart] = useState<Part | null>(null);
   const [txActionConfirm, setTxActionConfirm] = useState<TxActionConfirm | null>(null);
   const [txActionResult, setTxActionResult] = useState<TxActionResult | null>(null);
-  const [txSubmitConfirm, setTxSubmitConfirm] = useState<TxSubmitConfirm | null>(null);
-  const [txSubmitResult, setTxSubmitResult] = useState<TxSubmitResult | null>(null);
+  const [txBasketItems, setTxBasketItems] = useState<TxBasketItem[]>([]);
+  const [txBasketWorkType, setTxBasketWorkType] = useState<"IN" | "OUT">("IN");
+  const [txBasketDate, setTxBasketDate] = useState(formatDateInput);
+  const [txBasketCommonMemo, setTxBasketCommonMemo] = useState("");
+  const [txBasketConfirmOpen, setTxBasketConfirmOpen] = useState(false);
+  const [txBasketResult, setTxBasketResult] = useState<TxBasketResult | null>(null);
+  const [txBasketSubmitting, setTxBasketSubmitting] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [txEditForm, setTxEditForm] = useState<TxEditForm | null>(null);
   const [txHistorySearch, setTxHistorySearch] = useState("");
   const [txHistoryFilter, setTxHistoryFilter] = useState<TxHistoryFilter>("ALL");
+  const [txHistoryGradeFilter, setTxHistoryGradeFilter] = useState<TxHistoryGradeFilter>("ALL");
   const [txHistoryOnlySelectedPart, setTxHistoryOnlySelectedPart] = useState(false);
+  const [txHistoryModalOpen, setTxHistoryModalOpen] = useState(false);
+  const [txHistoryPage, setTxHistoryPage] = useState(1);
+  const [txHistoryTotal, setTxHistoryTotal] = useState(0);
+  const [txHistoryPeriod, setTxHistoryPeriod] = useState<TxHistoryPeriod>("ALL");
+  const [txHistoryStartDate, setTxHistoryStartDate] = useState("");
+  const [txHistoryEndDate, setTxHistoryEndDate] = useState("");
   const [labelPrintParts, setLabelPrintParts] = useState<Part[]>([]);
   const [labelPrintMode, setLabelPrintMode] = useState<"qr" | "barcode">("qr");
   const [selectedLabelPartIds, setSelectedLabelPartIds] = useState<Set<string>>(() => new Set());
@@ -500,7 +522,7 @@ export default function ManagementPage() {
   const [authChecked, setAuthChecked] = useState(false);
   const [authCheckTimedOut, setAuthCheckTimedOut] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
-  const [scannerTarget, setScannerTarget] = useState<"search" | "tx" | "part">("tx");
+  const [scannerTarget, setScannerTarget] = useState<"search" | "tx" | "part">("search");
   const [scannerError, setScannerError] = useState<string | null>(null);
   const [scannerStatus, setScannerStatus] = useState("카메라를 준비합니다...");
   const [isMobileLayout, setIsMobileLayout] = useState(false);
@@ -514,10 +536,7 @@ export default function ManagementPage() {
   const scannerLastAcceptedRef = useRef<{ value: string; at: number } | null>(null);
   const scannerPendingValueRef = useRef<string | null>(null);
   const locationFileInputRef = useRef<HTMLInputElement | null>(null);
-  const stockSectionRef = useRef<HTMLElement | null>(null);
   const seenVersionRef = useRef(APP_VERSION);
-  const txQtyInputRef = useRef<HTMLInputElement | null>(null);
-  const txMemoInputRef = useRef<HTMLInputElement | null>(null);
 
   const isAdmin = authRole === "admin";
   const deferredSearchInput = useDeferredValue(searchInput);
@@ -706,9 +725,18 @@ export default function ManagementPage() {
     setError(null);
 
     try {
+      const txParams = new URLSearchParams({
+        page: String(txHistoryPage),
+        limit: String(TX_HISTORY_PAGE_SIZE),
+      });
+      if (txHistoryFilter !== "ALL") txParams.set("txType", txHistoryFilter);
+      if (txHistoryGradeFilter !== "ALL") txParams.set("grade", txHistoryGradeFilter);
+      if (txHistoryStartDate) txParams.set("from", txHistoryStartDate);
+      if (txHistoryEndDate) txParams.set("to", txHistoryEndDate);
+      if (txHistoryOnlySelectedPart && selectedPart?.id) txParams.set("partId", selectedPart.id);
       const [partsRes, txRes, categoriesRes, locationsRes] = await Promise.all([
         fetch("/api/parts", { cache: "no-store" }),
-        fetch("/api/transactions", {
+        fetch(`/api/transactions?${txParams.toString()}`, {
           cache: "no-store",
           headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
         }),
@@ -717,7 +745,7 @@ export default function ManagementPage() {
       ]);
 
       const partsJson = (await partsRes.json()) as { data?: Part[]; error?: string };
-      const txJson = (await txRes.json()) as { data?: StockTransaction[]; error?: string };
+      const txJson = (await txRes.json()) as { data?: StockTransaction[]; error?: string; total?: number };
       const categoriesJson = (await categoriesRes.json()) as { data?: PartCategory[]; error?: string };
       const locationsJson = (await locationsRes.json()) as { data?: PartLocation[]; error?: string };
 
@@ -726,6 +754,7 @@ export default function ManagementPage() {
       } else {
         setParts(partsJson.data || []);
         setTxHistory(txJson.data || []);
+        setTxHistoryTotal(txJson.total ?? (txJson.data || []).length);
         setCategories(categoriesJson.data || []);
         setLocations(locationsJson.data || []);
       }
@@ -989,7 +1018,11 @@ export default function ManagementPage() {
 
   useEffect(() => {
     void loadData();
-  }, [session?.access_token]);
+  }, [session?.access_token, txForm.partId, txHistoryEndDate, txHistoryFilter, txHistoryGradeFilter, txHistoryOnlySelectedPart, txHistoryPage, txHistoryStartDate]);
+
+  useEffect(() => {
+    setTxHistoryPage(1);
+  }, [txForm.partId, txHistoryEndDate, txHistoryFilter, txHistoryGradeFilter, txHistoryOnlySelectedPart, txHistorySearch, txHistoryStartDate]);
 
   useEffect(() => {
     let mounted = true;
@@ -1382,31 +1415,22 @@ export default function ManagementPage() {
     if (!txEditForm) return null;
     return txHistory.find((tx) => tx.id === txEditForm.id) || null;
   }, [txEditForm, txHistory]);
-  const txQtyNumber = Number(txForm.qty);
-  const isTxQtyValid = Number.isFinite(txQtyNumber) && txQtyNumber > 0;
-  const txQtyStepOptions = txForm.txType === "OUT" ? [1, 2, 5] : [1, 5, 10];
-  const insufficientNormalStock =
-    selectedPart && txForm.txType === "OUT" && !txForm.isBGrade && isTxQtyValid
-      ? txQtyNumber > Number(selectedPart.normal_stock ?? selectedPart.current_stock ?? 0)
-      : false;
-  const insufficientBGradeStock =
-    selectedPart && txForm.txType === "OUT" && txForm.isBGrade && isTxQtyValid
-      ? txQtyNumber > Number(selectedPart.b_grade_stock ?? 0)
-      : false;
-  const txHasSelectionConflict = Boolean(txForm.itemNumber.trim()) && !selectedPart && matchedTxParts.length !== 1;
-  const txStatusTone = selectedPart ? "ready" : matchedTxParts.length > 1 ? "warn" : txForm.itemNumber.trim() ? "pending" : "idle";
-  const txStatusMessage = selectedPart
-    ? `${selectedPart.designation} / 구분 ${selectedPart.location || "-"} / 위치 ${selectedPart.position || "-"}가 선택되었습니다.`
-    : matchedTxParts.length > 1
-      ? "같은 품목번호가 여러 개 있습니다. 아래 목록에서 정확한 품목을 선택하세요."
-      : txForm.itemNumber.trim()
-        ? "등록된 품목을 찾지 못했습니다. 품목번호를 다시 확인하거나 검색 화면에서 선택하세요."
-        : "검색 결과에서 품목을 선택하거나 고유한 품목번호를 입력하세요.";
+  const txBasketType = txBasketItems[0]?.txType ?? txBasketWorkType;
+  const txBasketTotalQty = txBasketItems.reduce((sum, item) => {
+    const qty = Number(item.qty);
+    return sum + (Number.isFinite(qty) ? qty : 0);
+  }, 0);
+  const txBasketHasInvalidQty = txBasketItems.some((item) => {
+    const qty = Number(item.qty);
+    return !Number.isFinite(qty) || qty < 1;
+  });
   const filteredTxHistory = useMemo(() => {
     const keyword = txHistorySearch.trim().toLowerCase();
     return txHistory.filter((tx) => {
       if (txHistoryFilter === "ALL" && tx.tx_type === "ADJUST") return false;
       if (txHistoryFilter !== "ALL" && tx.tx_type !== txHistoryFilter) return false;
+      if (txHistoryGradeFilter === "NORMAL" && tx.is_b_grade) return false;
+      if (txHistoryGradeFilter === "B_GRADE" && !tx.is_b_grade) return false;
       if (txHistoryOnlySelectedPart && selectedPart) {
         const historyPartId = tx.part_id || tx.parts?.id;
         if (historyPartId !== selectedPart.id) return false;
@@ -1420,10 +1444,11 @@ export default function ManagementPage() {
         (tx.memo || "").toLowerCase().includes(keyword) ||
         (tx.actor_name || "").toLowerCase().includes(keyword) ||
         createdAt.includes(keyword) ||
-        (tx.is_b_grade ? "b급" : "").includes(keyword)
+        (tx.is_b_grade ? "b급" : "정상품").includes(keyword)
       );
     });
-  }, [selectedPart, txHistory, txHistoryFilter, txHistoryOnlySelectedPart, txHistorySearch]);
+  }, [selectedPart, txHistory, txHistoryFilter, txHistoryGradeFilter, txHistoryOnlySelectedPart, txHistorySearch]);
+  const txHistoryTotalPages = Math.max(1, Math.ceil(txHistoryTotal / TX_HISTORY_PAGE_SIZE));
   const adjustHistoryCount = useMemo(() => txHistory.filter((tx) => tx.tx_type === "ADJUST").length, [txHistory]);
   const latestHistoryActor = useMemo(() => {
     const latest = txHistory[0];
@@ -1467,40 +1492,11 @@ export default function ManagementPage() {
     () => todayHistory.filter((tx) => tx.tx_type === "OUT").reduce((sum, tx) => sum + Number(tx.qty || 0), 0),
     [todayHistory],
   );
-  const selectedPartHistory = useMemo(() => {
-    if (!partHistoryModalPart) return [];
-    return txHistory.filter((tx) => tx.part_id === partHistoryModalPart.id || tx.parts?.id === partHistoryModalPart.id);
-  }, [partHistoryModalPart, txHistory]);
-
-  useEffect(() => {
-    if (!isMobileLayout || activeTab !== "stock") return;
-    const timer = window.setTimeout(() => {
-      stockSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 80);
-    return () => window.clearTimeout(timer);
-  }, [activeTab, isMobileLayout, selectedPart?.id]);
-
-  useEffect(() => {
-    if (!isMobileLayout || activeTab !== "stock" || !selectedPart) return;
-    const timer = window.setTimeout(() => txQtyInputRef.current?.focus(), 140);
-    return () => window.clearTimeout(timer);
-  }, [activeTab, isMobileLayout, selectedPart]);
-
   useEffect(() => {
     if (search.trim().length > 0) {
       setSearchAssistOpen(true);
     }
   }, [search]);
-
-  function buildNextTxForm(options?: { partId?: string | null; itemNumber?: string; txType?: "IN" | "OUT" }) {
-    return {
-      ...createEmptyTxForm(),
-      txType: options?.txType ?? txForm.txType,
-      txDate: formatDateInput(),
-      partId: options?.partId ?? null,
-      itemNumber: options?.itemNumber ?? "",
-    };
-  }
 
   useEffect(() => {
     seenVersionRef.current = APP_VERSION;
@@ -1566,25 +1562,6 @@ export default function ManagementPage() {
     setSearchPositionFilter("ALL");
   }
 
-  function setTxType(next: "IN" | "OUT") {
-    setTxForm((prev) => ({
-      ...prev,
-      txType: next,
-      isBGrade: next === "IN" ? prev.isBGrade : false,
-    }));
-  }
-
-  function clearSelectedTxPart() {
-    setTxForm((prev) => ({
-      ...prev,
-      partId: null,
-      itemNumber: "",
-      qty: "",
-      memo: "",
-      isBGrade: false,
-    }));
-  }
-
   function chooseTxPart(part: Part, nextType?: "IN" | "OUT") {
     setTxForm((prev) => ({
       ...prev,
@@ -1593,19 +1570,223 @@ export default function ManagementPage() {
       txType: nextType ?? prev.txType,
       isBGrade: nextType === "OUT" ? false : prev.isBGrade,
     }));
-    setActiveTab("stock");
+    setActiveTab("inventory");
     setError(null);
-    if (isMobileLayout) {
-      window.setTimeout(() => txQtyInputRef.current?.focus(), 120);
+  }
+
+  function buildBasketItemId(partId: string, txType: "IN" | "OUT", isBGrade: boolean) {
+    return `${txType}:${partId}:${isBGrade ? "B" : "N"}`;
+  }
+
+  function mergeMemoText(currentMemo: string, nextMemo: string) {
+    const current = currentMemo.trim();
+    const next = nextMemo.trim();
+    if (!current) return next;
+    if (!next || current === next) return current;
+    return `${current} / ${next}`;
+  }
+
+  function buildCombinedMemo(itemMemo: string, commonMemo: string) {
+    const item = itemMemo.trim();
+    const common = commonMemo.trim();
+    if (item && common) return `${item} / ${common}`;
+    return item || common;
+  }
+
+  function formatStockSubmitError(errorMessage: string | undefined, part: Part, isBGrade: boolean, qty: number) {
+    if (errorMessage === "Part not found") {
+      return "품종등록이 필요합니다. 검색 또는 품종등록 화면에서 먼저 등록해 주세요.";
+    }
+    if (errorMessage?.includes("Insufficient stock")) {
+      return isBGrade
+        ? `B급 재고가 부족합니다. 현재 B급 재고 ${part.b_grade_stock ?? 0} / 요청 ${qty}`
+        : `일반 재고가 부족합니다. 현재 일반 재고 ${part.normal_stock ?? part.current_stock ?? 0} / 요청 ${qty}`;
+    }
+    return errorMessage || "입고/사용처리에 실패했습니다.";
+  }
+
+  async function saveStockTransaction(payload: StockSubmitPayload): Promise<StockSubmitResponse> {
+    try {
+      const res = await fetch("/api/stock", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({
+          partId: payload.part.id,
+          txType: payload.txType,
+          qty: payload.qty,
+          memo: payload.memo.trim() || null,
+          createdAt: payload.createdAt,
+          isBGrade: payload.isBGrade,
+          reclassifyToBGrade: payload.reclassifyToBGrade,
+        }),
+      });
+
+      const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; reclassifiedToBGrade?: boolean };
+      if (!res.ok) {
+        return {
+          ok: false,
+          error: formatStockSubmitError(json.error, payload.part, payload.isBGrade, payload.qty),
+        };
+      }
+      return { ok: true, reclassifiedToBGrade: Boolean(json.reclassifiedToBGrade) };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? `저장 요청 중 오류가 발생했습니다: ${error.message}` : "저장 요청 중 오류가 발생했습니다.",
+      };
     }
   }
 
-  function applyQuantityShortcut(amount: number) {
-    setTxForm((prev) => {
-      const current = Number(prev.qty);
-      const nextQty = Number.isFinite(current) && current > 0 ? current + amount : amount;
-      return { ...prev, qty: String(nextQty) };
+  function handleBasketWorkTypeChange(nextType: "IN" | "OUT") {
+    setError(null);
+    if (txBasketItems.length > 0 && nextType !== txBasketType) {
+      setError("현재 작업 품목을 비운 후 작업 유형을 변경할 수 있습니다.");
+      return;
+    }
+    setTxBasketWorkType(nextType);
+  }
+
+  function addPartToBasket(part: Part, isBGrade = false, nextType: "IN" | "OUT" = txBasketType) {
+    setError(null);
+    if (txBasketItems.length > 0 && nextType !== txBasketType) {
+      setError("현재 작업 품목을 비운 후 작업 유형을 변경할 수 있습니다.");
+      return;
+    }
+    const qty = 1;
+    const itemId = buildBasketItemId(part.id, nextType, isBGrade);
+    const existingQty = txBasketItems.find((item) => item.id === itemId);
+    const nextQty = (existingQty ? Number(existingQty.qty) || 0 : 0) + qty;
+    if (nextType === "OUT") {
+      const availableStock = isBGrade
+        ? Number(part.b_grade_stock ?? 0)
+        : Number(part.normal_stock ?? part.current_stock ?? 0);
+      if (nextQty > availableStock) {
+        setError(
+          isBGrade
+            ? `B급 재고가 부족합니다. 현재 B급 재고 ${availableStock} / 바구니 합계 ${nextQty}`
+            : `일반 재고가 부족합니다. 현재 일반 재고 ${availableStock} / 바구니 합계 ${nextQty}`,
+        );
+        return;
+      }
+    }
+
+    setTxBasketItems((prev) => {
+      const existingIndex = prev.findIndex((item) => item.id === itemId);
+      if (existingIndex === -1) {
+        return [
+          ...prev,
+          {
+            id: itemId,
+            part,
+            txType: nextType,
+            qty: String(qty),
+            memo: "",
+            isBGrade,
+            reclassifyToBGrade: false,
+          },
+        ];
+      }
+      return prev.map((item, index) =>
+        index === existingIndex
+          ? {
+              ...item,
+              qty: String((Number(item.qty) || 0) + qty),
+            }
+          : item,
+      );
     });
+    if (txBasketItems.length === 0) {
+      setTxBasketWorkType(nextType);
+    }
+    chooseTxPart(part);
+    showSuccessToast(`${part.designation} 바구니 추가`);
+  }
+
+  function updateBasketQty(itemId: string, nextQty: string) {
+    setTxBasketItems((prev) => prev.map((item) => (item.id === itemId ? { ...item, qty: nextQty } : item)));
+  }
+
+  function applyBasketQtyStep(itemId: string, amount: number) {
+    setTxBasketItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== itemId) return item;
+        const current = Number(item.qty);
+        const baseQty = Number.isFinite(current) && current > 0 ? current : 1;
+        return { ...item, qty: String(Math.max(1, baseQty + amount)) };
+      }),
+    );
+  }
+
+  function updateBasketMemo(itemId: string, memo: string) {
+    setTxBasketItems((prev) => prev.map((item) => (item.id === itemId ? { ...item, memo } : item)));
+  }
+
+  function updateBasketGrade(itemId: string, isBGrade: boolean) {
+    setTxBasketItems((prev) => {
+      const current = prev.find((item) => item.id === itemId);
+      if (!current || current.isBGrade === isBGrade) return prev;
+      const nextId = buildBasketItemId(current.part.id, current.txType, isBGrade);
+      const existing = prev.find((item) => item.id === nextId);
+      if (existing) {
+        return prev
+          .filter((item) => item.id !== itemId)
+          .map((item) =>
+            item.id === nextId
+              ? {
+                  ...item,
+                  qty: String((Number(item.qty) || 0) + (Number(current.qty) || 0)),
+                  memo: mergeMemoText(item.memo, current.memo),
+                  reclassifyToBGrade: false,
+                }
+              : item,
+          );
+      }
+      return prev.map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              id: nextId,
+              isBGrade,
+              reclassifyToBGrade: false,
+            }
+          : item,
+      );
+    });
+  }
+
+  function updateBasketReclassify(itemId: string, reclassifyToBGrade: boolean) {
+    setTxBasketItems((prev) => prev.map((item) => (item.id === itemId ? { ...item, reclassifyToBGrade } : item)));
+  }
+
+  function removeBasketItem(itemId: string) {
+    setTxBasketItems((prev) => prev.filter((item) => item.id !== itemId));
+  }
+
+  function clearTxBasket() {
+    setTxBasketItems([]);
+    setTxBasketCommonMemo("");
+    setTxBasketConfirmOpen(false);
+  }
+
+  function openTxBasketConfirm() {
+    setError(null);
+    if (txBasketItems.length === 0) {
+      setError("처리할 품목을 작업 바구니에 먼저 담아주세요.");
+      return;
+    }
+    if (txBasketHasInvalidQty) {
+      setError("작업 바구니의 모든 수량은 1 이상이어야 합니다.");
+      return;
+    }
+    const createdAt = txBasketDate ? new Date(`${txBasketDate}T00:00:00`) : null;
+    if (!createdAt || Number.isNaN(createdAt.getTime())) {
+      setError("작업 날짜를 정확히 입력하세요.");
+      return;
+    }
+    setTxBasketConfirmOpen(true);
   }
 
   function saveGlobalMinimumStock() {
@@ -1625,147 +1806,114 @@ export default function ManagementPage() {
     setAuthDisplayName(null);
   }
 
-  async function submitTx(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function submitTxBasket() {
+    if (txBasketItems.length === 0 || txBasketSubmitting) return;
     setError(null);
-    setTxSubmitConfirm(null);
+    setTxBasketSubmitting(true);
 
-    const qty = Number(txForm.qty);
-    const createdAt = txForm.txDate ? new Date(`${txForm.txDate}T00:00:00`) : null;
-    if (!selectedPart || !Number.isFinite(qty) || qty <= 0) {
-      setError("입고/사용처리할 품목을 정확히 선택하고 수량을 입력하세요.");
-      return;
-    }
-    if (!createdAt || Number.isNaN(createdAt.getTime())) {
-      setError("날짜를 정확히 입력하세요.");
-      return;
-    }
+    const snapshot = txBasketItems;
+    const results: TxBasketResultItem[] = [];
+    const successIds = new Set<string>();
+    let failed = false;
 
-    if (matchedTxParts.length > 1 && !txForm.partId) {
-      setError("같은 품목번호가 여러 개입니다. 정확한 품목을 먼저 선택하세요.");
-      return;
-    }
+    for (let index = 0; index < snapshot.length; index += 1) {
+      const item = snapshot[index];
+      const qty = Number(item.qty);
+      const createdAt = txBasketDate ? new Date(`${txBasketDate}T00:00:00`) : null;
 
-    if (txForm.txType === "OUT") {
-      const availableStock = txForm.isBGrade
-        ? Number(selectedPart.b_grade_stock ?? 0)
-        : Number(selectedPart.normal_stock ?? selectedPart.current_stock ?? 0);
-      if (qty > availableStock) {
-        setError(
-          txForm.isBGrade
-            ? `B급 재고가 부족합니다. 현재 B급 재고 ${availableStock} / 요청 ${qty}`
-            : `일반 재고가 부족합니다. 현재 일반 재고 ${availableStock} / 요청 ${qty}`,
-        );
-        return;
+      if (!Number.isFinite(qty) || qty < 1 || !createdAt || Number.isNaN(createdAt.getTime())) {
+        results.push({
+          item,
+          status: "failed",
+          message: "수량 또는 날짜를 확인해 주세요.",
+        });
+        for (const skipped of snapshot.slice(index + 1)) {
+          results.push({ item: skipped, status: "skipped", message: "앞 품목 실패로 미처리" });
+        }
+        failed = true;
+        break;
       }
-    }
 
-    setTxSubmitConfirm({
-      part: selectedPart,
-      qty,
-      createdAt: txForm.txDate,
-      memo: txForm.memo.trim(),
-      txType: txForm.txType,
-      isBGrade: txForm.isBGrade,
-      isLargeQty: qty >= 10,
-    });
-  }
-
-  async function confirmTxSubmit() {
-    if (!txSubmitConfirm) return;
-    const shouldAskBGrade = txSubmitConfirm.txType === "OUT" && !txSubmitConfirm.isBGrade;
-    setTxSubmitConfirm(null);
-    if (shouldAskBGrade) {
-      setBGradeUsagePrompt({
-        partId: txSubmitConfirm.part.id,
-        designation: txSubmitConfirm.part.designation,
-        itemNumber: txSubmitConfirm.part.item_number,
-        category: txSubmitConfirm.part.location || null,
-        position: txSubmitConfirm.part.position || null,
-        qty: txSubmitConfirm.qty,
-      });
-      return;
-    }
-
-    await performTxSubmit({ reclassifyToBGrade: false });
-  }
-
-  async function performTxSubmit({ reclassifyToBGrade }: { reclassifyToBGrade: boolean }) {
-    const qty = Number(txForm.qty);
-    const createdAt = txForm.txDate ? new Date(`${txForm.txDate}T00:00:00`) : null;
-    const targetPart =
-      (txForm.partId ? parts.find((part) => part.id === txForm.partId) : null) ||
-      (matchedTxParts.length === 1 ? matchedTxParts[0] : null);
-
-    if (!targetPart || !Number.isFinite(qty) || qty <= 0) {
-      setError("입고/사용처리할 품목을 정확히 선택하고 수량을 입력하세요.");
-      return;
-    }
-    if (!createdAt || Number.isNaN(createdAt.getTime())) {
-      setError("날짜를 정확히 입력하세요.");
-      return;
-    }
-
-    const res = await fetch("/api/stock", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-      },
-      body: JSON.stringify({
-        partId: targetPart.id,
-        txType: txForm.txType,
+      const result = await saveStockTransaction({
+        part: item.part,
+        txType: item.txType,
         qty,
-        memo: txForm.memo.trim() || null,
+        memo: buildCombinedMemo(item.memo, txBasketCommonMemo),
         createdAt: createdAt.toISOString(),
-        isBGrade: txForm.isBGrade,
-        reclassifyToBGrade,
-      }),
-    });
+        isBGrade: item.isBGrade,
+        reclassifyToBGrade: item.reclassifyToBGrade,
+      });
 
-    const json = (await res.json()) as { ok?: boolean; error?: string };
-    if (!res.ok) {
-      const friendlyError =
-        json.error === "Part not found"
-          ? "품종등록이 필요합니다. 검색 또는 품종등록 화면에서 먼저 등록해 주세요."
-          : json.error?.includes("Insufficient stock")
-            ? txForm.isBGrade
-              ? `B급 재고가 부족합니다. 현재 B급 재고 ${targetPart.b_grade_stock ?? 0} / 요청 ${qty}`
-              : `일반 재고가 부족합니다. 현재 일반 재고 ${targetPart.normal_stock ?? targetPart.current_stock ?? 0} / 요청 ${qty}`
-            : json.error || "입고/사용처리에 실패했습니다.";
-      setError(friendlyError);
-      return;
+      if (!result.ok) {
+        results.push({ item, status: "failed", message: result.error });
+        for (const skipped of snapshot.slice(index + 1)) {
+          results.push({ item: skipped, status: "skipped", message: "앞 품목 실패로 미처리" });
+        }
+        failed = true;
+        break;
+      }
+
+      successIds.add(item.id);
+      results.push({
+        item,
+        status: "success",
+        message: result.reclassifiedToBGrade ? "사용 후 B급 입고 완료" : "처리 완료",
+      });
     }
 
-    setBGradeUsagePrompt(null);
-    setTxSubmitResult({
-      part: targetPart,
-      txType: txForm.txType,
-      qty,
-      isBGrade: txForm.isBGrade,
-      reclassifiedToBGrade: reclassifyToBGrade,
-    });
-    setTxForm(buildNextTxForm());
-    showSuccessToast(
-      reclassifyToBGrade
-        ? "사용 처리 후 B급 입고까지 완료했습니다."
-        : `${txForm.txType === "IN" ? "입고" : "사용"} 처리 완료`,
-    );
-    await loadData();
+    setTxBasketItems((prev) => prev.filter((item) => !successIds.has(item.id)));
+    if (!failed) {
+      setTxBasketCommonMemo("");
+    }
+    setTxBasketConfirmOpen(false);
+    setTxBasketResult({ txType: snapshot[0]?.txType ?? txBasketType, results });
+    showSuccessToast(failed ? "작업 바구니 일부 처리 완료" : "작업 바구니 전체 처리 완료");
+    if (successIds.size > 0) {
+      await loadData();
+    }
+    setTxBasketSubmitting(false);
   }
 
-  async function approveBGradeUsagePrompt() {
-    setBGradeUsagePrompt(null);
-    await performTxSubmit({ reclassifyToBGrade: true });
-  }
-
-  async function continueNormalUsage() {
-    setBGradeUsagePrompt(null);
-    await performTxSubmit({ reclassifyToBGrade: false });
+  function openTxHistoryModal(part?: Part) {
+    if (part) {
+      chooseTxPart(part);
+      setTxHistoryOnlySelectedPart(true);
+    } else {
+      setTxHistoryOnlySelectedPart(false);
+    }
+    setTxHistoryPage(1);
+    setTxHistoryModalOpen(true);
   }
 
   function openPartHistory(part: Part) {
-    setPartHistoryModalPart(part);
+    openTxHistoryModal(part);
+  }
+
+  function applyTxHistoryPeriod(period: TxHistoryPeriod) {
+    const today = new Date();
+    const end = formatDateInput(today);
+    let start = "";
+
+    if (period === "TODAY") {
+      start = end;
+    } else if (period === "7D") {
+      const date = new Date(today);
+      date.setDate(date.getDate() - 6);
+      start = formatDateInput(date);
+    } else if (period === "30D") {
+      const date = new Date(today);
+      date.setDate(date.getDate() - 29);
+      start = formatDateInput(date);
+    } else if (period === "3M") {
+      const date = new Date(today);
+      date.setMonth(date.getMonth() - 3);
+      start = formatDateInput(date);
+    }
+
+    setTxHistoryPeriod(period);
+    setTxHistoryStartDate(period === "ALL" ? "" : start);
+    setTxHistoryEndDate(period === "ALL" ? "" : end);
+    setTxHistoryPage(1);
   }
 
   function openScanner(target: "search" | "tx" | "part") {
@@ -1821,7 +1969,7 @@ export default function ManagementPage() {
         itemNumber: normalized,
       }));
       if (matched.length === 1) {
-        setActiveTab("stock");
+        setActiveTab("inventory");
         showSuccessToast(`스캔된 품목 선택 완료: ${matched[0].designation}`);
       }
     } else {
@@ -1860,41 +2008,11 @@ export default function ManagementPage() {
     setPartForm(EMPTY_PART_FORM);
   }
 
-  function openStockQuickAction(part: Part) {
-    setStockConfirmPart(part);
-    setError(null);
-  }
-
-  function confirmStockQuickAction() {
-    if (!stockConfirmPart) return;
-    chooseTxPart(stockConfirmPart);
-    setStockConfirmPart(null);
-  }
-
   function handleSearchQuickAction(part: Part, txType: "IN" | "OUT") {
     setStockModalOpen(false);
     setLowStockModalOpen(false);
-    chooseTxPart(part, txType);
-  }
-
-  function handleTxResultFollowUp(mode: "same-part" | "new-part" | "search") {
-    if (!txSubmitResult) return;
-    const lastPart = txSubmitResult.part;
-    const lastType = txSubmitResult.txType;
-    setTxSubmitResult(null);
-    if (mode === "same-part") {
-      setTxForm(buildNextTxForm({ partId: lastPart.id, itemNumber: lastPart.item_number, txType: lastType }));
-      setActiveTab("stock");
-      return;
-    }
-    if (mode === "search") {
-      setSearchInput(lastPart.item_number);
-      setSearch(lastPart.item_number);
-      setActiveTab("search");
-      return;
-    }
-    setTxForm(buildNextTxForm());
-    setActiveTab("stock");
+    setActiveTab("inventory");
+    addPartToBasket(part, false, txType);
   }
 
   function openCategoryManager() {
@@ -2293,11 +2411,11 @@ export default function ManagementPage() {
           <div className={`statValue ${lowCount > 0 ? "low" : ""}`}>{lowCount}</div>
           <div className="meta">최소재고 이하 품목 확인</div>
         </button>
-        <div className="statCard spotlight todayFlow">
-          <div className="meta">오늘 처리</div>
-          <div className="statValue">{todayHistory.length}</div>
-          <div className="meta">입고 {todayInQty} / 사용 {todayOutQty}</div>
-        </div>
+        <button className="statCard statCardButton spotlight todayFlow" type="button" onClick={() => openTxHistoryModal()}>
+          <div className="meta">입출고 이력</div>
+          <div className="statValue">{txHistoryTotal || txHistory.length}</div>
+          <div className="meta">오늘 {todayHistory.length}건 · 전체 기록 조회</div>
+        </button>
         <div className="statCard spotlight latestTouch">
           <div className="meta">최근 상태</div>
           <div className="statValue">{isMobileLayout ? "Mobile" : "Desktop"}</div>
@@ -2359,11 +2477,8 @@ export default function ManagementPage() {
 
       <section className="panel" style={{ marginBottom: 14 }}>
         <div className="tabNav" role="tablist" aria-label="관리 탭">
-          <button className={`tabButton ${activeTab === "search" ? "active" : ""}`} type="button" onClick={() => setActiveTab("search")}>
-            검색
-          </button>
-          <button className={`tabButton ${activeTab === "stock" ? "active" : ""}`} type="button" onClick={() => setActiveTab("stock")}>
-            입고/사용처리
+          <button className={`tabButton ${activeTab === "inventory" ? "active" : ""}`} type="button" onClick={() => setActiveTab("inventory")}>
+            재고관리
           </button>
           <button className={`tabButton ${activeTab === "admin" ? "active" : ""}`} type="button" onClick={() => setActiveTab("admin")}>
             품종등록
@@ -2411,72 +2526,81 @@ export default function ManagementPage() {
         </div>
       ) : null}
 
-      {activeTab === "search" ? (
+      {activeTab === "inventory" ? (
         <>
           <section className="toolbarPanel panel searchCommandPanel" aria-label="검색 및 필터">
             <div className="searchPanelHead">
               <div>
                 <h2 style={{ margin: 0 }}>빠른 검색</h2>
-                <div className="meta">품목번호, 품명, 구분, 위치를 빠르게 좁혀서 바로 입고/사용 작업으로 이어갈 수 있습니다.</div>
+                <div className="meta">품목번호와 품명으로 찾을 때만 펼쳐 사용하는 보조 검색입니다.</div>
               </div>
-              <div className="badgeRow" style={{ marginTop: 0 }}>
-                <span className="softBadge">부족 재고 강조</span>
-                <span className="softBadge">입고/사용 바로가기</span>
-              </div>
-            </div>
-            <div className="toolbarSearch">
-              <select className="select" value={searchField} onChange={(e) => setSearchField(e.target.value as PartSearchField)}>
-                <option value="all">전체</option>
-                <option value="designation">품목명</option>
-                <option value="itemNumber">파트번호</option>
-              </select>
-              <div className="inlineFieldRow">
-                <input
-                  className="input"
-                  placeholder="검색 조건에 맞는 값을 입력하세요"
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      submitSearch();
-                    }
-                  }}
-                />
+              <div className="actions">
                 <button className="btn secondary small" type="button" onClick={() => openScanner("search")}>
                   바코드/QR 스캔
                 </button>
+                <button className="btn secondary small" type="button" onClick={() => setQuickSearchOpen((value) => !value)}>
+                  {quickSearchOpen ? "빠른 검색 접기" : "빠른 검색 펼치기"}
+                </button>
               </div>
-              <button className="btn" type="button" onClick={submitSearch}>
-                검색
-              </button>
             </div>
-            <div className="filterChips" aria-label="정렬">
-              <button className={`btn secondary small ${partsSort === "item" ? "activeChoice" : ""}`} type="button" onClick={() => setPartsSort("item")}>
-                품목번호순
-              </button>
-              <button
-                className={`btn secondary small ${partsSort === "designation" ? "activeChoice" : ""}`}
-                type="button"
-                onClick={() => setPartsSort("designation")}
-              >
-                품명순
-              </button>
-              <button className={`btn secondary small ${partsSort === "stockAsc" ? "activeChoice" : ""}`} type="button" onClick={() => setPartsSort("stockAsc")}>
-                재고낮은순
-              </button>
-              <button className={`btn secondary small ${partsSort === "stockDesc" ? "activeChoice" : ""}`} type="button" onClick={() => setPartsSort("stockDesc")}>
-                재고높은순
-              </button>
-            </div>
-            <div className="toolbarActions">
-              <button className={`btn ${showLowOnly ? "" : "secondary"}`} type="button" onClick={() => setShowLowOnly((v) => !v)}>
-                {showLowOnly ? "부족 재고만" : "전체 보기"}
-              </button>
-              <button className="btn secondary" type="button" onClick={clearSearch}>
-                검색초기화
-              </button>
-            </div>
+            {quickSearchOpen ? (
+              <>
+                <div className="toolbarSearch">
+                  <select className="select" value={searchField} onChange={(e) => setSearchField(e.target.value as PartSearchField)}>
+                    <option value="all">전체</option>
+                    <option value="designation">품목명</option>
+                    <option value="itemNumber">파트번호</option>
+                  </select>
+                  <div className="inlineFieldRow">
+                    <input
+                      className="input"
+                      placeholder="검색 조건에 맞는 값을 입력하세요"
+                      value={searchInput}
+                      onChange={(e) => setSearchInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          submitSearch();
+                        }
+                      }}
+                    />
+                  </div>
+                  <button className="btn" type="button" onClick={submitSearch}>
+                    검색
+                  </button>
+                </div>
+                <div className="filterChips" aria-label="정렬">
+                  <button className={`btn secondary small ${partsSort === "item" ? "activeChoice" : ""}`} type="button" onClick={() => setPartsSort("item")}>
+                    품목번호순
+                  </button>
+                  <button
+                    className={`btn secondary small ${partsSort === "designation" ? "activeChoice" : ""}`}
+                    type="button"
+                    onClick={() => setPartsSort("designation")}
+                  >
+                    품명순
+                  </button>
+                  <button className={`btn secondary small ${partsSort === "stockAsc" ? "activeChoice" : ""}`} type="button" onClick={() => setPartsSort("stockAsc")}>
+                    재고낮은순
+                  </button>
+                  <button className={`btn secondary small ${partsSort === "stockDesc" ? "activeChoice" : ""}`} type="button" onClick={() => setPartsSort("stockDesc")}>
+                    재고높은순
+                  </button>
+                </div>
+                <div className="toolbarActions">
+                  <button className={`btn ${showLowOnly ? "" : "secondary"}`} type="button" onClick={() => setShowLowOnly((v) => !v)}>
+                    {showLowOnly ? "부족 재고만" : "전체 보기"}
+                  </button>
+                  <button className="btn secondary" type="button" onClick={clearSearch}>
+                    검색초기화
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="panelNotice">
+                기본 탐색은 아래 구분/위치 버튼을 사용합니다. 품목번호나 품명이 필요할 때만 빠른 검색을 펼쳐주세요.
+              </div>
+            )}
           </section>
 
           {search.trim().length > 0 || hasActiveSearchAssistSelection ? (
@@ -2499,7 +2623,7 @@ export default function ManagementPage() {
               </div>
               <div className="quickStatCard">
                 <div className="meta">빠른 안내</div>
-                <div className="meta">품목명 클릭 또는 바로 입고/사용 버튼으로 작업을 시작할 수 있습니다.</div>
+                <div className="meta">검색 결과의 선택 버튼으로 작업 바구니에 품목을 담을 수 있습니다.</div>
               </div>
             </section>
           ) : null}
@@ -2507,11 +2631,11 @@ export default function ManagementPage() {
           <section className="panel" style={{ marginBottom: 14 }}>
             <div className="adminHeaderRow">
               <div>
-                <h2 style={{ margin: 0 }}>{search.trim().length > 0 ? "결과 보조 필터" : "구분/위치로 검색"}</h2>
+                <h2 style={{ margin: 0 }}>구분/위치 탐색</h2>
                 <div className="meta">
                   {search.trim().length > 0
                     ? "펼친 상태에서만 검색 결과를 구분과 위치로 다시 좁힙니다."
-                    : "펼친 상태에서만 구분이나 위치 선택으로 품목 목록을 볼 수 있습니다."}
+                    : "기본으로 펼쳐져 있으며 구분이나 위치 선택만으로 품목 목록을 볼 수 있습니다."}
                 </div>
               </div>
               <button className="btn secondary small" type="button" onClick={() => setSearchAssistOpen((value) => !value)}>
@@ -2580,6 +2704,8 @@ export default function ManagementPage() {
             )}
           </section>
 
+          <div className="inventoryManagementGrid">
+            <div className="inventoryResultsColumn">
           <section className="panel">
             <div className="adminHeaderRow">
               <h2 style={{ margin: 0 }}>검색 결과</h2>
@@ -2587,8 +2713,8 @@ export default function ManagementPage() {
             </div>
             <div className="badgeRow searchLegendRow">
               <span className="softBadge warn">부족 재고는 빨간 강조로 표시됩니다.</span>
-              <span className="softBadge">품명을 누르면 바로 입출고 진행</span>
-              <span className="softBadge">재고 배지를 누르면 이력 확인</span>
+              <span className="softBadge">선택 버튼으로 작업 바구니 추가</span>
+              <span className="softBadge">재고 배지를 누르면 입출고 이력 확인</span>
             </div>
             {isMobileLayout ? (
               <div className="groupedResults">
@@ -2605,15 +2731,13 @@ export default function ManagementPage() {
                   const low = isPartLow(part, minimumStockValue);
                   const locationInfo = locationsByCode.get((part.position || "").toUpperCase());
                   return (
-                    <article key={part.id} className="dataCard">
+                    <article key={part.id} className={`dataCard ${selectedPart?.id === part.id ? "activeSelection" : ""}`}>
                     <div className={`dataCardHead ${low ? "attention" : ""}`}>
                       <strong>{part.location || "구분 없음"}</strong>
                       <span className={low ? "low" : undefined}>재고 {part.current_stock}</span>
                     </div>
                     <div className="meta">{part.item_number}</div>
-                      <button className="textTrigger" type="button" onClick={() => openStockQuickAction(part)}>
-                        {part.designation}
-                      </button>
+                      <strong>{part.designation}</strong>
                       {part.spare_parts_identifier ? <div className="meta partMemo">{part.spare_parts_identifier}</div> : null}
                       <div className="badgeRow">
                         <button className="softBadge textTrigger" type="button" onClick={() => openPartHistory(part)}>
@@ -2635,16 +2759,16 @@ export default function ManagementPage() {
                       <div className="meta" style={{ marginTop: 8 }}>
                         최근 수정 {new Date(part.updated_at).toLocaleDateString("ko-KR")}
                       </div>
-                      {isAdmin ? (
-                        <div className="actions" style={{ marginTop: 10 }}>
+                      <div className="actions" style={{ marginTop: 10 }}>
+                        <button className="btn small" type="button" onClick={() => addPartToBasket(part)}>
+                          선택
+                        </button>
+                        {isAdmin ? (
                           <button className="btn secondary small" type="button" onClick={() => editPart(part)}>
                             수정
                           </button>
-                          <button className="btn danger small" type="button" onClick={() => void deletePart(part)}>
-                            삭제
-                          </button>
-                        </div>
-                      ) : null}
+                        ) : null}
+                      </div>
                     </article>
                   );
                 })}
@@ -2678,6 +2802,7 @@ export default function ManagementPage() {
                       <th>재고</th>
                       <th>단위</th>
                       <th>위치</th>
+                      <th>작업</th>
                       {isAdmin ? <th>관리</th> : null}
                     </tr>
                   </thead>
@@ -2685,13 +2810,11 @@ export default function ManagementPage() {
                     {group.parts.map((part) => {
                       const locationInfo = locationsByCode.get((part.position || "").toUpperCase());
                       return (
-                      <tr key={part.id}>
+                      <tr key={part.id} className={selectedPart?.id === part.id ? "activeSelection" : undefined}>
                         <td>{part.location || "-"}</td>
                         <td>{part.item_number}</td>
                         <td>
-                          <button className="textTrigger" type="button" onClick={() => openStockQuickAction(part)}>
-                            {part.designation}
-                          </button>
+                          <strong>{part.designation}</strong>
                           {part.spare_parts_identifier ? <div className="meta partMemo">{part.spare_parts_identifier}</div> : null}
                           <div className="meta">최근 수정 {new Date(part.updated_at).toLocaleDateString("ko-KR")}</div>
                         </td>
@@ -2702,14 +2825,16 @@ export default function ManagementPage() {
                         </td>
                         <td>{part.unit_of_quantity || "-"}</td>
                         <td><LocationPreview position={part.position} description={locationInfo?.description} imageUrl={locationInfo?.image_url} /></td>
+                        <td>
+                          <button className="btn small" type="button" onClick={() => addPartToBasket(part)}>
+                            선택
+                          </button>
+                        </td>
                         {isAdmin ? (
                           <td>
                             <div className="actions">
                               <button className="btn secondary small" type="button" onClick={() => editPart(part)}>
                                 수정
-                              </button>
-                              <button className="btn danger small" type="button" onClick={() => void deletePart(part)}>
-                                삭제
                               </button>
                             </div>
                           </td>
@@ -2730,198 +2855,160 @@ export default function ManagementPage() {
               </div>
             )}
           </section>
-        </>
-      ) : null}
-
-      {activeTab === "stock" ? (
-        <>
-          <section ref={stockSectionRef} className="panel" style={{ marginBottom: 16 }}>
+            </div>
+            <div className="inventoryActionColumn">
+          <section className="panel txBasketPanel" style={{ marginBottom: 16 }}>
             <div className="adminHeaderRow">
-              <h2 style={{ margin: 0 }}>입고/사용처리</h2>
-              <span className={`statusPill ${txStatusTone}`}>{selectedPart ? "선택 완료" : matchedTxParts.length > 1 ? "선택 필요" : txForm.itemNumber.trim() ? "확인 필요" : "대기중"}</span>
+              <div>
+                <h2 style={{ margin: 0 }}>입출고 작업 바구니</h2>
+                <div className="meta">
+                  {txBasketItems.length > 0
+                    ? `${formatTxModeLabel(txBasketType)} ${txBasketItems.length}품목 / 합계 ${txBasketTotalQty}`
+                    : "검색 결과에서 선택한 품목을 담아 입출고를 처리합니다."}
+                </div>
+              </div>
+              <div className="actions">
+                <button className="btn secondary small" type="button" onClick={clearTxBasket} disabled={txBasketItems.length === 0 || txBasketSubmitting}>
+                  전체 비우기
+                </button>
+              </div>
             </div>
-            <div className={`selectionSummaryCard ${txStatusTone}`}>
-              <div className="selectionSummaryHead">
-                <div>
-                  <div className="meta">현재 상태</div>
-                  <strong>{txStatusMessage}</strong>
-                </div>
-                {selectedPart ? (
-                  <button className="btn secondary small" type="button" onClick={clearSelectedTxPart}>
-                    선택 해제
-                  </button>
-                ) : null}
-              </div>
-              {selectedPart ? (
-                <>
-                  <div className="selectionMetaRow">
-                    <span className="softBadge">{selectedPart.item_number}</span>
-                    <span className="softBadge">{selectedPart.location || "구분 없음"}</span>
-                    <span className="softBadge">{selectedPart.position || "위치 없음"}</span>
-                    <span className="softBadge">{selectedPart.unit_of_quantity || "-"}</span>
-                  </div>
-                  <div className="selectionStatsGrid">
-                    <div className="selectionStatBox">
-                      <div className="meta">총 재고</div>
-                      <strong>{selectedPart.current_stock}</strong>
-                    </div>
-                    <div className="selectionStatBox">
-                      <div className="meta">일반 재고</div>
-                      <strong>{selectedPart.normal_stock ?? selectedPart.current_stock ?? 0}</strong>
-                    </div>
-                    <div className="selectionStatBox">
-                      <div className="meta">B급 재고</div>
-                      <strong>{selectedPart.b_grade_stock ?? 0}</strong>
-                    </div>
-                  </div>
-                </>
-              ) : null}
-            </div>
-            <form onSubmit={submitTx}>
-              <div className="formRow">
-                <label className="label">품목 선택</label>
-                <input
-                  className="input"
-                  autoComplete="off"
-                  value={txForm.itemNumber}
-                  onChange={(e) => setTxForm((v) => ({ ...v, partId: null, itemNumber: e.target.value.toUpperCase() }))}
-                  placeholder="검색 결과에서 선택하거나 품목번호를 입력"
-                />
-                <div className="actions" style={{ marginTop: 8 }}>
-                  <button className="btn secondary small" type="button" onClick={() => openScanner("tx")}>
-                    바코드/QR 스캔
-                  </button>
-                </div>
-                <div className={`fieldHint ${txStatusTone}`}>{txStatusMessage}</div>
-                {matchedTxParts.length > 1 ? (
-                  <div className="candidateList">
-                    {matchedTxParts.map((part) => (
-                      <button
-                        key={part.id}
-                        className={`candidateItem${txForm.partId === part.id ? " active" : ""}`}
-                        type="button"
-                        onClick={() => chooseTxPart(part)}
-                      >
-                        <strong>{part.item_number}</strong>
-                        <span>{part.designation}</span>
-                        <span className="meta">구분 {part.location || "-"} / 위치 {part.position || "-"}</span>
-                        <span className="meta">일반 {part.normal_stock ?? part.current_stock ?? 0} / B급 {part.b_grade_stock ?? 0}</span>
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
 
+            <div className="basketControlPanel">
               <div className="formRow">
-                <label className="label">구분</label>
-                <div className={`modeToggle ${txForm.txType === "OUT" ? "out" : "in"}`}>
-                  <button className={`modeToggleButton ${txForm.txType === "IN" ? "active" : ""}`} type="button" onClick={() => setTxType("IN")}>
-                    입고
-                  </button>
-                  <button className={`modeToggleButton ${txForm.txType === "OUT" ? "active out" : ""}`} type="button" onClick={() => setTxType("OUT")}>
-                    사용
-                  </button>
-                </div>
-              </div>
-
-              <div className="formRow">
-                <label className="label">수량</label>
-                <div className="inlineFieldRow">
-                  <input
-                    ref={txQtyInputRef}
-                    className="input"
-                    type="number"
-                    inputMode="decimal"
-                    min="0"
-                    step="0.01"
-                    autoComplete="off"
-                    value={txForm.qty}
-                    onChange={(e) => setTxForm((v) => ({ ...v, qty: e.target.value }))}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        txMemoInputRef.current?.focus();
-                      }
-                    }}
-                  />
-                  <span className="unitBadge">{selectedPart?.unit_of_quantity || "EA"}</span>
-                </div>
-                <div className="quickStepRow">
-                  {txQtyStepOptions.map((amount) => (
-                    <button key={amount} className="btn secondary quickStepButton" type="button" onClick={() => applyQuantityShortcut(amount)}>
-                      +{amount}
-                    </button>
-                  ))}
-                </div>
-                {selectedPart ? (
-                  <div className={`fieldHint ${insufficientNormalStock || insufficientBGradeStock ? "warn" : "ready"}`}>
-                    {txForm.txType === "IN"
-                      ? `현재 재고 ${selectedPart.current_stock} / 일반 ${selectedPart.normal_stock ?? selectedPart.current_stock ?? 0} / B급 ${selectedPart.b_grade_stock ?? 0}`
-                      : txForm.isBGrade
-                        ? `사용 가능 B급 재고 ${selectedPart.b_grade_stock ?? 0}${insufficientBGradeStock ? ` / 요청 ${txQtyNumber}` : ""}`
-                        : `사용 가능 일반 재고 ${selectedPart.normal_stock ?? selectedPart.current_stock ?? 0}${insufficientNormalStock ? ` / 요청 ${txQtyNumber}` : ""}`}
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="formRow">
-                <label className="label">재고 구분</label>
-                <div className="segmentedToggle">
-                  <button
-                    className={`segmentButton ${!txForm.isBGrade ? "active" : ""}`}
-                    type="button"
-                    onClick={() => setTxForm((v) => ({ ...v, isBGrade: false }))}
-                  >
-                    정상품
-                  </button>
-                  <button
-                    className={`segmentButton warn ${txForm.isBGrade ? "active" : ""}`}
-                    type="button"
-                    onClick={() => setTxForm((v) => ({ ...v, isBGrade: true }))}
-                  >
-                    B급
-                  </button>
+                <label className="label">작업 유형</label>
+                <div className={`modeToggle ${txBasketType === "OUT" ? "out" : "in"}`}>
+                  <button className={`modeToggleButton ${txBasketType === "IN" ? "active" : ""}`} type="button" onClick={() => handleBasketWorkTypeChange("IN")}>입고</button>
+                  <button className={`modeToggleButton ${txBasketType === "OUT" ? "active out" : ""}`} type="button" onClick={() => handleBasketWorkTypeChange("OUT")}>사용</button>
                 </div>
                 <div className="meta">
-                  {txForm.txType === "OUT"
-                    ? "일반 사용 저장 전에는 B급 재분류 여부를 한 번 더 확인합니다."
-                    : "입고 시 필요한 재고 등급을 먼저 선택해 주세요."}
+                  {txBasketItems.length > 0 ? "품목이 담긴 상태에서는 작업 유형을 변경할 수 없습니다." : "작업 유형을 먼저 선택한 뒤 품목을 담아주세요."}
                 </div>
               </div>
-
               <div className="formRow">
-                <label className="label">메모</label>
-                <input
-                  ref={txMemoInputRef}
-                  className="input"
-                  autoComplete="off"
-                  value={txForm.memo}
-                  onChange={(e) => setTxForm((v) => ({ ...v, memo: e.target.value }))}
-                  placeholder="선택 입력"
-                />
-              </div>
-
-              <div className="formRow">
-                <label className="label">날짜</label>
+                <label className="label">작업 날짜</label>
                 <input
                   className="input"
                   type="date"
-                  value={txForm.txDate}
-                  onChange={(e) => setTxForm((v) => ({ ...v, txDate: e.target.value }))}
+                  value={txBasketDate}
+                  onChange={(e) => setTxBasketDate(e.target.value)}
+                  disabled={txBasketSubmitting}
                 />
               </div>
-
-              <div className={`actions ${isMobileLayout ? "stickyActionBar" : ""}`}>
-                <button className="btn" type="submit" disabled={txHasSelectionConflict || insufficientNormalStock || insufficientBGradeStock}>
-                  {formatTxModeLabel(txForm.txType)} 저장
-                </button>
-                <button className="btn secondary" type="button" onClick={() => setTxForm(buildNextTxForm())}>
-                  초기화
-                </button>
+              <div className="formRow">
+                <label className="label">공통 메모</label>
+                <input
+                  className="input"
+                  autoComplete="off"
+                  value={txBasketCommonMemo}
+                  onChange={(e) => setTxBasketCommonMemo(e.target.value)}
+                  placeholder="모든 바구니 품목 이력에 함께 남길 메모"
+                  disabled={txBasketSubmitting}
+                />
               </div>
-            </form>
-          </section>
+            </div>
 
+            {txBasketItems.length > 0 ? (
+              <>
+                <div className="txBasketList">
+                  {txBasketItems.map((item) => (
+                    <div key={item.id} className="txBasketItem">
+                      <div className="txBasketItemHead">
+                        <div>
+                          <strong>{item.part.designation}</strong>
+                          <div className="meta">{item.part.item_number}</div>
+                        </div>
+                        <div className="badgeRow">
+                          <span className={`txBadge ${item.txType === "OUT" ? "out" : "in"}`}>{formatTxModeLabel(item.txType)}</span>
+                          <span className={`softBadge ${item.isBGrade ? "warn" : ""}`}>{item.isBGrade ? "B급" : "정상품"}</span>
+                        </div>
+                      </div>
+                      <div className="meta">
+                        현재 재고 {item.part.current_stock} / 일반 {item.part.normal_stock ?? item.part.current_stock ?? 0} / B급 {item.part.b_grade_stock ?? 0} / 위치 {item.part.position || "-"}
+                      </div>
+                      <div className="segmentedToggle">
+                        <button
+                          className={`segmentButton ${!item.isBGrade ? "active" : ""}`}
+                          type="button"
+                          onClick={() => updateBasketGrade(item.id, false)}
+                          disabled={txBasketSubmitting}
+                        >
+                          정상품
+                        </button>
+                        <button
+                          className={`segmentButton warn ${item.isBGrade ? "active" : ""}`}
+                          type="button"
+                          onClick={() => updateBasketGrade(item.id, true)}
+                          disabled={txBasketSubmitting}
+                        >
+                          B급
+                        </button>
+                      </div>
+                      <div className="txBasketControls">
+                        <button className="btn secondary quantityStepButton" type="button" onClick={() => applyBasketQtyStep(item.id, -5)} disabled={txBasketSubmitting}>
+                          -5
+                        </button>
+                        <button className="btn secondary quantityStepButton" type="button" onClick={() => applyBasketQtyStep(item.id, -1)} disabled={txBasketSubmitting}>
+                          -1
+                        </button>
+                        <input
+                          className="input quantityInput"
+                          type="number"
+                          inputMode="decimal"
+                          min="1"
+                          step="0.01"
+                          value={item.qty}
+                          onChange={(e) => updateBasketQty(item.id, e.target.value)}
+                          disabled={txBasketSubmitting}
+                        />
+                        <button className="btn secondary quantityStepButton" type="button" onClick={() => applyBasketQtyStep(item.id, 1)} disabled={txBasketSubmitting}>
+                          +1
+                        </button>
+                        <button className="btn secondary quantityStepButton" type="button" onClick={() => applyBasketQtyStep(item.id, 5)} disabled={txBasketSubmitting}>
+                          +5
+                        </button>
+                        <button className="btn danger small" type="button" onClick={() => removeBasketItem(item.id)} disabled={txBasketSubmitting}>
+                          삭제
+                        </button>
+                      </div>
+                      <input
+                        className="input"
+                        autoComplete="off"
+                        value={item.memo}
+                        onChange={(e) => updateBasketMemo(item.id, e.target.value)}
+                        placeholder="개별 메모"
+                        disabled={txBasketSubmitting}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div className="actions txSaveActions">
+                  <button className="btn txSaveButton" type="button" onClick={openTxBasketConfirm} disabled={txBasketSubmitting || txBasketHasInvalidQty}>
+                    전체 {formatTxModeLabel(txBasketType)}처리
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="panelNotice">검색 결과에서 선택을 눌러 작업 품목을 담아주세요. 초기 수량은 1로 추가됩니다.</div>
+            )}
+          </section>
+            </div>
+          </div>
+        </>
+      ) : null}
+
+      {txHistoryModalOpen ? (
+        <div className="scannerOverlay" role="dialog" aria-modal="true" aria-label="입출고 이력">
+          <div className="scannerModal stockModal txHistoryDialog">
+            <div className="adminHeaderRow" style={{ marginBottom: 12 }}>
+              <div>
+                <h2 style={{ margin: 0 }}>입출고 이력</h2>
+                <div className="meta">100건씩 최신순으로 조회하며 다음 페이지로 과거 기록을 볼 수 있습니다.</div>
+              </div>
+              <button className="btn secondary small" type="button" onClick={() => setTxHistoryModalOpen(false)}>
+                닫기
+              </button>
+            </div>
           {selectedPart ? (
             <section className="panel" style={{ marginBottom: 16 }}>
               <div className="adminHeaderRow">
@@ -2949,10 +3036,12 @@ export default function ManagementPage() {
             </section>
           ) : null}
 
-          <section className="panel">
+            <section className="panel">
             <div className="adminHeaderRow">
-              <h2 style={{ margin: 0 }}>최근 이력</h2>
-              <div className="meta">{filteredTxHistory.length}건</div>
+              <h2 style={{ margin: 0 }}>입출고 이력</h2>
+              <div className="meta">
+                {txHistoryPage} / {txHistoryTotalPages} 페이지 · 전체 {txHistoryTotal}건 · 현재 표시 {filteredTxHistory.length}건
+              </div>
             </div>
             <section className="quickStatsPanel" style={{ marginBottom: 12 }}>
               <div className="quickStatCard">
@@ -2976,7 +3065,7 @@ export default function ManagementPage() {
             <div className="formRow" style={{ marginBottom: 12 }}>
               <input
                 className="input"
-                placeholder="품목번호 / 품명 / 구분 / 메모 / 사용자 / 날짜 검색"
+                placeholder="품목번호 / 품명 / 파트번호 / 구분 / 메모 / 사용자 / 날짜 검색"
                 value={txHistorySearch}
                 onChange={(e) => setTxHistorySearch(e.target.value)}
               />
@@ -2985,12 +3074,8 @@ export default function ManagementPage() {
               <button className={`btn secondary small ${txHistoryFilter === "ALL" ? "activeChoice" : ""}`} type="button" onClick={() => setTxHistoryFilter("ALL")}>
                 전체
               </button>
-              <button className={`btn secondary small ${txHistoryFilter === "IN" ? "activeChoice" : ""}`} type="button" onClick={() => setTxHistoryFilter("IN")}>
-                입고
-              </button>
-              <button className={`btn secondary small ${txHistoryFilter === "OUT" ? "activeChoice" : ""}`} type="button" onClick={() => setTxHistoryFilter("OUT")}>
-                사용
-              </button>
+              <button className={`btn secondary small ${txHistoryFilter === "IN" ? "activeChoice" : ""}`} type="button" onClick={() => setTxHistoryFilter("IN")}>입고</button>
+              <button className={`btn secondary small ${txHistoryFilter === "OUT" ? "activeChoice" : ""}`} type="button" onClick={() => setTxHistoryFilter("OUT")}>사용</button>
               <button className={`btn secondary small ${txHistoryFilter === "ADJUST" ? "activeChoice" : ""}`} type="button" onClick={() => setTxHistoryFilter("ADJUST")}>
                 수정내역
               </button>
@@ -3003,6 +3088,68 @@ export default function ManagementPage() {
                   {txHistoryOnlySelectedPart ? "선택 품목만" : "전체 품목"}
                 </button>
               ) : null}
+            </div>
+            <div className="filterChips" aria-label="최근 이력 등급 필터" style={{ marginBottom: 12 }}>
+              <button className={`btn secondary small ${txHistoryGradeFilter === "ALL" ? "activeChoice" : ""}`} type="button" onClick={() => setTxHistoryGradeFilter("ALL")}>
+                전체 등급
+              </button>
+              <button
+                className={`btn secondary small ${txHistoryGradeFilter === "NORMAL" ? "activeChoice" : ""}`}
+                type="button"
+                onClick={() => setTxHistoryGradeFilter("NORMAL")}
+              >
+                정상품
+              </button>
+              <button
+                className={`btn secondary small ${txHistoryGradeFilter === "B_GRADE" ? "activeChoice" : ""}`}
+                type="button"
+                onClick={() => setTxHistoryGradeFilter("B_GRADE")}
+              >
+                B급
+              </button>
+            </div>
+            <div className="filterChips" aria-label="기간 필터" style={{ marginBottom: 12 }}>
+              <button className={`btn secondary small ${txHistoryPeriod === "TODAY" ? "activeChoice" : ""}`} type="button" onClick={() => applyTxHistoryPeriod("TODAY")}>
+                오늘
+              </button>
+              <button className={`btn secondary small ${txHistoryPeriod === "7D" ? "activeChoice" : ""}`} type="button" onClick={() => applyTxHistoryPeriod("7D")}>
+                최근 7일
+              </button>
+              <button className={`btn secondary small ${txHistoryPeriod === "30D" ? "activeChoice" : ""}`} type="button" onClick={() => applyTxHistoryPeriod("30D")}>
+                최근 30일
+              </button>
+              <button className={`btn secondary small ${txHistoryPeriod === "3M" ? "activeChoice" : ""}`} type="button" onClick={() => applyTxHistoryPeriod("3M")}>
+                최근 3개월
+              </button>
+              <button className={`btn secondary small ${txHistoryPeriod === "ALL" ? "activeChoice" : ""}`} type="button" onClick={() => applyTxHistoryPeriod("ALL")}>
+                전체
+              </button>
+            </div>
+            <div className="historyDateGrid" style={{ marginBottom: 12 }}>
+              <label className="fieldStack">
+                <span className="meta">시작일</span>
+                <input
+                  className="input"
+                  type="date"
+                  value={txHistoryStartDate}
+                  onChange={(e) => {
+                    setTxHistoryPeriod("CUSTOM");
+                    setTxHistoryStartDate(e.target.value);
+                  }}
+                />
+              </label>
+              <label className="fieldStack">
+                <span className="meta">종료일</span>
+                <input
+                  className="input"
+                  type="date"
+                  value={txHistoryEndDate}
+                  onChange={(e) => {
+                    setTxHistoryPeriod("CUSTOM");
+                    setTxHistoryEndDate(e.target.value);
+                  }}
+                />
+              </label>
             </div>
             {isMobileLayout ? (
               <div className="historyCards">
@@ -3108,8 +3255,30 @@ export default function ManagementPage() {
                 </table>
               </div>
             )}
+            <div className="historyPager">
+              <button
+                className="btn secondary small"
+                type="button"
+                disabled={txHistoryPage <= 1}
+                onClick={() => setTxHistoryPage((page) => Math.max(1, page - 1))}
+              >
+                이전 100건
+              </button>
+              <span className="meta">
+                {txHistoryPage} / {txHistoryTotalPages} 페이지
+              </span>
+              <button
+                className="btn secondary small"
+                type="button"
+                disabled={txHistoryPage >= txHistoryTotalPages}
+                onClick={() => setTxHistoryPage((page) => Math.min(txHistoryTotalPages, page + 1))}
+              >
+                다음 100건
+              </button>
+            </div>
           </section>
-        </>
+          </div>
+        </div>
       ) : null}
 
       {stockModalOpen ? (
@@ -3208,23 +3377,14 @@ export default function ManagementPage() {
                       </div>
                     </div>
                     <div className="quickActionRow" style={{ marginTop: 10 }}>
-                      <button className="btn small" type="button" onClick={() => handleSearchQuickAction(part, "IN")}>
-                        입고
-                      </button>
-                      <button className="btn danger small" type="button" onClick={() => handleSearchQuickAction(part, "OUT")}>
-                        사용
-                      </button>
-                      <button className="btn secondary small" type="button" onClick={() => openPartHistory(part)}>
-                        이력
-                      </button>
+                      <button className="btn small" type="button" onClick={() => handleSearchQuickAction(part, "IN")}>입고 담기</button>
+                      <button className="btn danger small" type="button" onClick={() => handleSearchQuickAction(part, "OUT")}>사용 담기</button>
+                      <button className="btn secondary small" type="button" onClick={() => openPartHistory(part)}>입출고 이력</button>
                     </div>
                     {isAdmin ? (
                       <div className="actions" style={{ marginTop: 10 }}>
                         <button className="btn secondary small" type="button" onClick={() => editPart(part)}>
                           수정
-                        </button>
-                        <button className="btn danger small" type="button" onClick={() => void deletePart(part)}>
-                          삭제
                         </button>
                       </div>
                     ) : null}
@@ -3280,15 +3440,9 @@ export default function ManagementPage() {
                         <td><LocationPreview position={part.position} description={locationInfo?.description} imageUrl={locationInfo?.image_url} /></td>
                         <td>
                           <div className="actions">
-                            <button className="btn small" type="button" onClick={() => handleSearchQuickAction(part, "IN")}>
-                              입고
-                            </button>
-                            <button className="btn danger small" type="button" onClick={() => handleSearchQuickAction(part, "OUT")}>
-                              사용
-                            </button>
-                            <button className="btn secondary small" type="button" onClick={() => openPartHistory(part)}>
-                              이력
-                            </button>
+                            <button className="btn small" type="button" onClick={() => handleSearchQuickAction(part, "IN")}>입고 담기</button>
+                            <button className="btn danger small" type="button" onClick={() => handleSearchQuickAction(part, "OUT")}>사용 담기</button>
+                            <button className="btn secondary small" type="button" onClick={() => openPartHistory(part)}>입출고 이력</button>
                           </div>
                         </td>
                         {isAdmin ? (
@@ -3296,9 +3450,6 @@ export default function ManagementPage() {
                             <div className="actions">
                               <button className="btn secondary small" type="button" onClick={() => editPart(part)}>
                                 수정
-                              </button>
-                              <button className="btn danger small" type="button" onClick={() => void deletePart(part)}>
-                                삭제
                               </button>
                             </div>
                           </td>
@@ -3362,15 +3513,9 @@ export default function ManagementPage() {
                         </div>
                       </div>
                       <div className="quickActionRow" style={{ marginTop: 10 }}>
-                        <button className="btn small" type="button" onClick={() => handleSearchQuickAction(part, "IN")}>
-                          입고
-                        </button>
-                        <button className="btn danger small" type="button" onClick={() => handleSearchQuickAction(part, "OUT")}>
-                          사용
-                        </button>
-                        <button className="btn secondary small" type="button" onClick={() => openPartHistory(part)}>
-                          이력
-                        </button>
+                        <button className="btn small" type="button" onClick={() => handleSearchQuickAction(part, "IN")}>입고 담기</button>
+                        <button className="btn danger small" type="button" onClick={() => handleSearchQuickAction(part, "OUT")}>사용 담기</button>
+                        <button className="btn secondary small" type="button" onClick={() => openPartHistory(part)}>입출고 이력</button>
                       </div>
                     </article>
                   );
@@ -3409,15 +3554,9 @@ export default function ManagementPage() {
                           </td>
                           <td>
                             <div className="actions">
-                              <button className="btn small" type="button" onClick={() => handleSearchQuickAction(part, "IN")}>
-                                입고
-                              </button>
-                              <button className="btn danger small" type="button" onClick={() => handleSearchQuickAction(part, "OUT")}>
-                                사용
-                              </button>
-                              <button className="btn secondary small" type="button" onClick={() => openPartHistory(part)}>
-                                이력
-                              </button>
+                              <button className="btn small" type="button" onClick={() => handleSearchQuickAction(part, "IN")}>입고 담기</button>
+                              <button className="btn danger small" type="button" onClick={() => handleSearchQuickAction(part, "OUT")}>사용 담기</button>
+                              <button className="btn secondary small" type="button" onClick={() => openPartHistory(part)}>입출고 이력</button>
                             </div>
                           </td>
                         </tr>
@@ -3716,6 +3855,18 @@ export default function ManagementPage() {
                   <button className="btn" type="submit" disabled={savingPart}>
                     {savingPart ? "저장 중..." : partForm.id ? "수정 저장" : "품종 등록"}
                   </button>
+                  {partForm.id ? (
+                    <button
+                      className="btn danger"
+                      type="button"
+                      onClick={() => {
+                        const editingPart = parts.find((part) => part.id === partForm.id);
+                        if (editingPart) void deletePart(editingPart);
+                      }}
+                    >
+                      품목 삭제
+                    </button>
+                  ) : null}
                   <button className="btn secondary" type="button" onClick={resetPartForm}>
                     폼 초기화
                   </button>
@@ -3822,102 +3973,6 @@ export default function ManagementPage() {
             <div className="panelNotice">품종등록은 관리자 계정만 사용할 수 있습니다.</div>
           </section>
         )
-      ) : null}
-
-      {partHistoryModalPart ? (
-        <div className="scannerOverlay" role="dialog" aria-modal="true" aria-label="품목 최근 이력">
-          <div className="scannerModal stockModal">
-            <div className="adminHeaderRow" style={{ marginBottom: 8 }}>
-              <div>
-                <h2 style={{ margin: 0 }}>품목 최근 이력</h2>
-                <div className="meta" style={{ marginTop: 4 }}>
-                  {partHistoryModalPart.item_number} / {partHistoryModalPart.designation} / 구분 {partHistoryModalPart.location || "-"} / 위치 {partHistoryModalPart.position || "-"}
-                </div>
-              </div>
-              <div className="actions">
-                <div className="meta">{selectedPartHistory.length}건</div>
-                <button className="btn secondary small" type="button" onClick={() => setPartHistoryModalPart(null)}>
-                  닫기
-                </button>
-              </div>
-            </div>
-            {isMobileLayout ? (
-              <div className="historyCards">
-                {selectedPartHistory.map((tx) => (
-                  <article key={tx.id} className="dataCard">
-                    <div className="dataCardHead">
-                      <strong>{tx.parts?.item_number || partHistoryModalPart.item_number}</strong>
-                      <span className={`txBadge ${tx.tx_type === "OUT" ? "out" : "in"}`}>{formatTxTypeLabel(tx.tx_type)}</span>
-                    </div>
-                    <div>{tx.parts?.designation || partHistoryModalPart.designation}</div>
-                    <div className="badgeRow">
-                      <span className="softBadge">{formatTransactionSplitQty(tx)}</span>
-                      <span className="softBadge">{tx.parts?.location || partHistoryModalPart.location || "구분 없음"}</span>
-                      <span className={`softBadge ${tx.tx_type === "ADJUST" ? "warn" : ""}`}>{tx.actor_name || "기록자 없음"}</span>
-                    </div>
-                    <div className="kvGrid">
-                      <div>
-                        <span className="meta">수량</span>
-                        <div>{formatTransactionSplitQty(tx)}</div>
-                      </div>
-                      <div>
-                        <span className="meta">날짜</span>
-                        <div>{formatDisplayDate(tx.created_at)}</div>
-                      </div>
-                      <div>
-                        <span className="meta">메모</span>
-                        <div>{tx.memo || "-"}</div>
-                      </div>
-                      <div>
-                        <span className="meta">사용자 / 등급</span>
-                        <div>{tx.actor_name || "-"} / {tx.is_b_grade ? "B급" : "정상품"}</div>
-                      </div>
-                    </div>
-                  </article>
-                ))}
-                {!loading && selectedPartHistory.length === 0 ? <div className="panelNotice">해당 품목의 최근 이력이 없습니다.</div> : null}
-              </div>
-            ) : (
-              <div className="historyWrap">
-                <table className="historyTable">
-                  <thead>
-                    <tr>
-                      <th>구분</th>
-                      <th>품목번호</th>
-                      <th>품명</th>
-                      <th>카테고리</th>
-                      <th>수량</th>
-                      <th>메모</th>
-                      <th>날짜</th>
-                      <th>사용자</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedPartHistory.map((tx) => (
-                      <tr key={tx.id}>
-                        <td>
-                          <span className={`txBadge ${tx.tx_type === "OUT" ? "out" : "in"}`}>{formatTxTypeLabel(tx.tx_type)}</span>
-                        </td>
-                        <td>{tx.parts?.item_number || partHistoryModalPart.item_number}</td>
-                        <td>{tx.parts?.designation || partHistoryModalPart.designation}</td>
-                        <td>{tx.parts?.location || partHistoryModalPart.location || "-"}</td>
-                        <td>{formatTransactionSplitQty(tx)}</td>
-                        <td>{tx.memo || "-"}</td>
-                        <td>{formatDisplayDate(tx.created_at)}</td>
-                        <td>{tx.actor_name || "-"} / {tx.is_b_grade ? "B급" : "정상품"}</td>
-                      </tr>
-                    ))}
-                    {!loading && selectedPartHistory.length === 0 ? (
-                      <tr>
-                        <td colSpan={8}>해당 품목의 최근 이력이 없습니다.</td>
-                      </tr>
-                    ) : null}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
       ) : null}
 
       {categoryModalOpen ? (
@@ -4078,106 +4133,52 @@ export default function ManagementPage() {
         </div>
       ) : null}
 
-      {stockConfirmPart ? (
-        <div className="scannerOverlay" role="dialog" aria-modal="true" aria-label="입고/사용처리 진행 확인">
-          <div className="scannerModal">
+      {txBasketConfirmOpen ? (
+        <div className="scannerOverlay" role="dialog" aria-modal="true" aria-label="작업 바구니 저장 확인">
+          <div className="scannerModal stockModal">
             <div className="adminHeaderRow" style={{ marginBottom: 8 }}>
-              <h2 style={{ margin: 0 }}>입고/사용처리 진행</h2>
-              <button className="btn secondary small" type="button" onClick={() => setStockConfirmPart(null)}>
+              <div>
+                <h2 style={{ margin: 0 }}>작업 바구니 {formatTxModeLabel(txBasketType)} 확인</h2>
+                <div className="meta">{txBasketItems.length}품목 / 합계 {txBasketTotalQty} / 작업 날짜 {txBasketDate}</div>
+              </div>
+              <button className="btn secondary small" type="button" onClick={() => setTxBasketConfirmOpen(false)} disabled={txBasketSubmitting}>
                 닫기
               </button>
             </div>
             <div className="scannerGuide">
-              입고/사용처리를 진행하시겠습니까?
+              아래 순서대로 저장합니다. 중간에 실패하면 그 품목에서 멈추고 뒤 품목은 미처리로 남습니다.
             </div>
-            <div className="scannerConfirmBox">
-              <div><strong>{stockConfirmPart.designation}</strong></div>
-              <div className="meta" style={{ marginTop: 4 }}>
-                {stockConfirmPart.item_number} / 구분 {stockConfirmPart.location || "-"} / 위치 {stockConfirmPart.position || "-"}
-              </div>
-            </div>
-            <div className="actions" style={{ marginTop: 12 }}>
-              <button className="btn" type="button" onClick={confirmStockQuickAction}>
-                진행
-              </button>
-              <button className="btn secondary" type="button" onClick={() => setStockConfirmPart(null)}>
-                취소
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {bGradeUsagePrompt ? (
-        <div className="scannerOverlay" role="dialog" aria-modal="true" aria-label="B급 분류 확인">
-          <div className="scannerModal">
-            <div className="adminHeaderRow" style={{ marginBottom: 8 }}>
-              <h2 style={{ margin: 0 }}>B급 분류 확인</h2>
-              <button className="btn secondary small" type="button" onClick={() => setBGradeUsagePrompt(null)}>
-                닫기
-              </button>
-            </div>
-            <div className="scannerGuide">
-              B급으로 분류하시겠습니까?
-            </div>
-            <div className="scannerConfirmBox">
-              <div><strong>{bGradeUsagePrompt.designation}</strong></div>
-              <div className="meta" style={{ marginTop: 4 }}>
-                {bGradeUsagePrompt.itemNumber} / 구분 {bGradeUsagePrompt.category || "-"} / 위치 {bGradeUsagePrompt.position || "-"} / 수량 {bGradeUsagePrompt.qty}
-              </div>
-              <div className="meta" style={{ marginTop: 6 }}>
-                승인하면 일반 사용 처리 후 같은 수량이 B급 재고로 자동 입고됩니다.
-              </div>
-            </div>
-            <div className="actions" style={{ marginTop: 12 }}>
-              <button className="btn" type="button" onClick={approveBGradeUsagePrompt}>
-                B급으로 분류
-              </button>
-              <button className="btn secondary" type="button" onClick={continueNormalUsage}>
-                일반 사용 처리
-              </button>
-              <button className="btn secondary" type="button" onClick={() => setBGradeUsagePrompt(null)}>
-                취소
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {txSubmitConfirm ? (
-        <div className="scannerOverlay" role="dialog" aria-modal="true" aria-label="입출고 저장 확인">
-          <div className="scannerModal">
-            <div className="adminHeaderRow" style={{ marginBottom: 8 }}>
-              <h2 style={{ margin: 0 }}>{formatTxModeLabel(txSubmitConfirm.txType)} 저장 확인</h2>
-              <button className="btn secondary small" type="button" onClick={() => setTxSubmitConfirm(null)}>
-                닫기
-              </button>
-            </div>
-            <div className="scannerGuide">
-              저장 전 최종 내용을 확인해 주세요.
-            </div>
-            <div className="scannerConfirmBox">
-              <div><strong>{txSubmitConfirm.part.item_number} / {txSubmitConfirm.part.designation}</strong></div>
-              <div className="meta" style={{ marginTop: 4 }}>
-                {formatTxModeLabel(txSubmitConfirm.txType)} / 수량 {txSubmitConfirm.qty} / 날짜 {txSubmitConfirm.createdAt}
-              </div>
-              <div className="meta" style={{ marginTop: 4 }}>
-                구분 {txSubmitConfirm.part.location || "-"} / 위치 {txSubmitConfirm.part.position || "-"} / {txSubmitConfirm.isBGrade ? "B급" : "정상품"}
-              </div>
-              <div className="meta" style={{ marginTop: 6 }}>
-                메모 {txSubmitConfirm.memo || "-"}
-              </div>
-              {txSubmitConfirm.isLargeQty ? (
-                <div className="fieldHint pending" style={{ marginTop: 8 }}>
-                  수량이 큰 편입니다. 저장 전에 한 번 더 확인해 주세요.
+            <div className="txBasketConfirmList">
+              {txBasketItems.map((item) => (
+                <div key={item.id} className="txBasketConfirmItem">
+                  <div>
+                    <strong>{item.part.item_number} / {item.part.designation}</strong>
+                    <div className="meta">
+                      {formatTxModeLabel(item.txType)} / 수량 {item.qty} / 날짜 {txBasketDate} / {item.isBGrade ? "B급" : "정상품"}
+                    </div>
+                    <div className="meta">
+                      메모 {buildCombinedMemo(item.memo, txBasketCommonMemo) || "-"}
+                    </div>
+                  </div>
+                  {item.txType === "OUT" && !item.isBGrade ? (
+                    <label className="checkboxLine">
+                      <input
+                        type="checkbox"
+                        checked={item.reclassifyToBGrade}
+                        onChange={(e) => updateBasketReclassify(item.id, e.target.checked)}
+                        disabled={txBasketSubmitting}
+                      />
+                      B급으로 재분류
+                    </label>
+                  ) : null}
                 </div>
-              ) : null}
+              ))}
             </div>
             <div className="actions" style={{ marginTop: 12 }}>
-              <button className="btn" type="button" onClick={() => void confirmTxSubmit()}>
-                저장 진행
+              <button className="btn txSaveButton" type="button" onClick={() => void submitTxBasket()} disabled={txBasketSubmitting}>
+                {txBasketSubmitting ? "처리 중..." : `전체 ${formatTxModeLabel(txBasketType)}처리`}
               </button>
-              <button className="btn secondary" type="button" onClick={() => setTxSubmitConfirm(null)}>
+              <button className="btn secondary" type="button" onClick={() => setTxBasketConfirmOpen(false)} disabled={txBasketSubmitting}>
                 다시 확인
               </button>
             </div>
@@ -4185,37 +4186,40 @@ export default function ManagementPage() {
         </div>
       ) : null}
 
-      {txSubmitResult ? (
-        <div className="scannerOverlay" role="dialog" aria-modal="true" aria-label="입출고 저장 완료">
-          <div className="scannerModal">
+      {txBasketResult ? (
+        <div className="scannerOverlay" role="dialog" aria-modal="true" aria-label="작업 바구니 처리 결과">
+          <div className="scannerModal stockModal">
             <div className="adminHeaderRow" style={{ marginBottom: 8 }}>
-              <h2 style={{ margin: 0 }}>{formatTxModeLabel(txSubmitResult.txType)} 처리 완료</h2>
-              <button className="btn secondary small" type="button" onClick={() => setTxSubmitResult(null)}>
+              <div>
+                <h2 style={{ margin: 0 }}>작업 바구니 처리 결과</h2>
+                <div className="meta">
+                  {formatTxModeLabel(txBasketResult.txType)} / 성공 {txBasketResult.results.filter((result) => result.status === "success").length}건
+                </div>
+              </div>
+              <button className="btn secondary small" type="button" onClick={() => setTxBasketResult(null)}>
                 닫기
               </button>
             </div>
-            <div className="scannerConfirmBox">
-              <div><strong>{txSubmitResult.part.item_number} / {txSubmitResult.part.designation}</strong></div>
-              <div className="meta" style={{ marginTop: 4 }}>
-                {formatTxModeLabel(txSubmitResult.txType)} / 수량 {txSubmitResult.qty} / {txSubmitResult.isBGrade ? "B급" : "정상품"}
-              </div>
-              {txSubmitResult.reclassifiedToBGrade ? (
-                <div className="meta" style={{ marginTop: 6 }}>
-                  일반 사용 후 같은 수량이 B급 재고로 자동 입고되었습니다.
+            <div className="txBasketResultList">
+              {txBasketResult.results.map((result) => (
+                <div key={`${result.item.id}-${result.status}`} className={`txBasketResultItem ${result.status}`}>
+                  <span className={`statusPill ${result.status === "success" ? "ready" : result.status === "failed" ? "warn" : "idle"}`}>
+                    {result.status === "success" ? "성공" : result.status === "failed" ? "실패" : "미처리"}
+                  </span>
+                  <div>
+                    <strong>{result.item.part.item_number} / {result.item.part.designation}</strong>
+                    <div className="meta">
+                      수량 {result.item.qty} / {result.item.isBGrade ? "B급" : "정상품"} / {result.message}
+                    </div>
+                  </div>
                 </div>
-              ) : null}
+              ))}
             </div>
-            <div className="actions" style={{ marginTop: 12 }}>
-              <button className="btn" type="button" onClick={() => handleTxResultFollowUp("same-part")}>
-                같은 품목 계속
-              </button>
-              <button className="btn secondary" type="button" onClick={() => handleTxResultFollowUp("new-part")}>
-                다른 품목 처리
-              </button>
-              <button className="btn secondary" type="button" onClick={() => handleTxResultFollowUp("search")}>
-                검색으로 이동
-              </button>
-            </div>
+            {txBasketItems.length > 0 ? (
+              <div className="fieldHint pending" style={{ marginTop: 12 }}>
+                성공한 품목은 바구니에서 제거했고, 실패 또는 미처리 품목은 다시 시도할 수 있도록 남겨두었습니다.
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}

@@ -255,8 +255,9 @@ a {
 
 .candidateItem {
   display: grid;
-  gap: 2px;
-  padding: 10px 12px;
+  gap: 4px;
+  min-height: 64px;
+  padding: 14px 16px;
   border-radius: 12px;
   border: 1px solid var(--line);
   background: rgba(255, 253, 250, 0.92);
@@ -267,6 +268,7 @@ a {
 .candidateItem.active {
   border-color: #7ab7aa;
   background: #e7f3ef;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
 }
 
 .quickActionRow {
@@ -388,17 +390,18 @@ a {
 .modeToggle {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  gap: 12px;
 }
 
 .modeToggleButton {
-  min-height: 42px;
-  border-radius: 12px;
+  min-height: 68px;
+  border-radius: 14px;
   border: 1px solid var(--line);
   background: rgba(255, 253, 250, 0.85);
   color: var(--ink);
   font: inherit;
-  font-weight: 700;
+  font-size: 1.08rem;
+  font-weight: 800;
   cursor: pointer;
 }
 
@@ -439,6 +442,165 @@ a {
   height: 36px;
   border-radius: 999px;
   font-weight: 800;
+}
+
+.txWorkPanel {
+  display: grid;
+  gap: 14px;
+}
+
+.inventoryManagementGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(360px, 0.85fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.inventoryResultsColumn,
+.inventoryActionColumn {
+  min-width: 0;
+}
+
+.inventoryActionColumn {
+  position: sticky;
+  top: 12px;
+}
+
+.dataCard.activeSelection,
+tr.activeSelection {
+  outline: 3px solid rgba(15, 118, 110, 0.18);
+  background: #eaf6f1;
+}
+
+.txWorkForm {
+  display: grid;
+  gap: 12px;
+}
+
+.quantityStepper {
+  display: grid;
+  grid-template-columns: minmax(58px, 0.5fr) minmax(58px, 0.5fr) minmax(120px, 1.2fr) minmax(58px, 0.5fr) minmax(58px, 0.5fr);
+  gap: 8px;
+  align-items: stretch;
+}
+
+.quantityStepButton {
+  min-height: 52px;
+  border-radius: 14px;
+  font-size: 1.02rem;
+  font-weight: 900;
+}
+
+.quantityInput {
+  min-height: 52px;
+  text-align: center;
+  font-size: 1.08rem;
+  font-weight: 800;
+}
+
+.quantityMetaRow,
+.memoShortcutRow,
+.dateInputRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.memoShortcutButton {
+  min-height: 38px;
+}
+
+.txSaveActions {
+  align-items: stretch;
+}
+
+.txSaveButton {
+  min-height: 58px;
+  min-width: 180px;
+  border-radius: 14px;
+  font-size: 1.04rem;
+  font-weight: 900;
+}
+
+.txBasketPanel {
+  display: grid;
+  gap: 14px;
+}
+
+.basketControlPanel {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 253, 250, 0.72);
+}
+
+.txBasketList,
+.txBasketConfirmList,
+.txBasketResultList {
+  display: grid;
+  gap: 10px;
+}
+
+.txBasketItem,
+.txBasketConfirmItem,
+.txBasketResultItem {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 253, 250, 0.9);
+  padding: 12px;
+}
+
+.txBasketItem {
+  display: grid;
+  gap: 10px;
+}
+
+.txBasketItemHead,
+.txBasketConfirmItem,
+.txBasketResultItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.txBasketControls {
+  display: grid;
+  grid-template-columns: minmax(50px, 0.45fr) minmax(50px, 0.45fr) minmax(88px, 1fr) minmax(50px, 0.45fr) minmax(50px, 0.45fr) auto;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.txBasketResultItem.success {
+  border-color: #8ccab0;
+  background: #eef8f1;
+}
+
+.txBasketResultItem.failed {
+  border-color: #efb3b3;
+  background: #fff1f1;
+}
+
+.txBasketResultItem.skipped {
+  border-color: #f0d48a;
+  background: #fff8e7;
+}
+
+.checkboxLine {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.checkboxLine input {
+  width: 18px;
+  height: 18px;
 }
 
 .segmentedToggle {
@@ -714,6 +876,24 @@ table {
 .historyWrap {
   max-height: 460px;
   overflow: auto;
+}
+
+.txHistoryDialog {
+  overflow: auto;
+}
+
+.historyDateGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.historyPager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding-top: 12px;
 }
 
 .historyTable {
@@ -1669,6 +1849,53 @@ th {
   .segmentedToggle,
   .modeToggle {
     grid-template-columns: 1fr;
+  }
+
+  .inventoryManagementGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .inventoryActionColumn {
+    position: static;
+  }
+
+  .quantityStepper {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .historyDateGrid,
+  .historyPager {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .historyPager {
+    display: grid;
+  }
+
+  .quantityInput {
+    grid-column: 1 / -1;
+    order: -1;
+  }
+
+  .txSaveActions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .txBasketItemHead,
+  .txBasketConfirmItem,
+  .txBasketResultItem {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .txBasketControls {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .txBasketControls .btn.danger {
+    grid-column: 1 / -1;
   }
 
   .btn {

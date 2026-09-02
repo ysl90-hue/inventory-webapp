@@ -8,9 +8,40 @@ export async function GET(req: Request) {
     const authHeader = req.headers.get("authorization");
     const bearerToken =
       authHeader && authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : null;
+    const { searchParams } = new URL(req.url);
+    const pageParam = Number(searchParams.get("page") || "1");
+    const limitParam = Number(searchParams.get("limit") || "100");
+    const page = Number.isFinite(pageParam) && pageParam > 0 ? Math.floor(pageParam) : 1;
+    const limit = Number.isFinite(limitParam) && limitParam > 0 ? Math.min(Math.floor(limitParam), 500) : 100;
+    const offset = (page - 1) * limit;
+    const txType = searchParams.get("txType");
+    const grade = searchParams.get("grade");
+    const partId = searchParams.get("partId");
+    const from = searchParams.get("from");
+    const to = searchParams.get("to");
+
+    const filters: string[] = [];
+    if (txType === "IN" || txType === "OUT" || txType === "ADJUST") {
+      filters.push(`tx_type=eq.${encodeURIComponent(txType)}`);
+    }
+    if (grade === "NORMAL") {
+      filters.push("is_b_grade=eq.false");
+    } else if (grade === "B_GRADE") {
+      filters.push("is_b_grade=eq.true");
+    }
+    if (partId) {
+      filters.push(`part_id=eq.${encodeURIComponent(partId)}`);
+    }
+    if (from) {
+      filters.push(`created_at=gte.${encodeURIComponent(`${from}T00:00:00`)}`);
+    }
+    if (to) {
+      filters.push(`created_at=lte.${encodeURIComponent(`${to}T23:59:59.999`)}`);
+    }
+    const filterQuery = filters.length > 0 ? `&${filters.join("&")}` : "";
 
     const txPath =
-      "/stock_transactions?select=id,part_id,created_by,tx_type,qty,memo,is_b_grade,created_at,parts!inner(id,item_number,designation,current_stock,location,is_b_grade)&order=created_at.desc&limit=20";
+      `/stock_transactions?select=id,part_id,created_by,tx_type,qty,memo,is_b_grade,created_at,parts!inner(id,item_number,designation,current_stock,location,is_b_grade)&order=created_at.desc&limit=${limit}&offset=${offset}${filterQuery}`;
     const res = bearerToken
       ? await supabaseRestAsUser(txPath, bearerToken)
       : await supabaseRest(txPath);
@@ -71,7 +102,22 @@ export async function GET(req: Request) {
       actor_name: tx.created_by ? actorMap.get(tx.created_by) || null : null,
     }));
 
-    return NextResponse.json({ data });
+    let total = data.length;
+    const countPath = `/stock_transactions?select=id,parts!inner(id)${filterQuery}`;
+    const countRes = bearerToken
+      ? await supabaseRestAsUser(countPath, bearerToken)
+      : await supabaseRest(countPath);
+    const countText = await countRes.text();
+    if (countRes.ok) {
+      try {
+        const countRows = JSON.parse(countText) as Array<{ id: string }>;
+        total = countRows.length;
+      } catch {
+        total = data.length;
+      }
+    }
+
+    return NextResponse.json({ data, page, limit, total, hasMore: offset + data.length < total });
   } catch (error) {
     return NextResponse.json(
       {
