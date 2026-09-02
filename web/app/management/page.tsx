@@ -493,7 +493,8 @@ export default function ManagementPage() {
   const [txActionConfirm, setTxActionConfirm] = useState<TxActionConfirm | null>(null);
   const [txActionResult, setTxActionResult] = useState<TxActionResult | null>(null);
   const [txBasketItems, setTxBasketItems] = useState<TxBasketItem[]>([]);
-  const [txBasketWorkType, setTxBasketWorkType] = useState<"IN" | "OUT">("IN");
+  const [txBasketWorkType, setTxBasketWorkType] = useState<"IN" | "OUT">("OUT");
+  const [txBasketWorkTypeConfirm, setTxBasketWorkTypeConfirm] = useState<"IN" | "OUT" | null>(null);
   const [txBasketDate, setTxBasketDate] = useState(formatDateInput);
   const [txBasketCommonMemo, setTxBasketCommonMemo] = useState("");
   const [txBasketConfirmOpen, setTxBasketConfirmOpen] = useState(false);
@@ -1642,11 +1643,26 @@ export default function ManagementPage() {
 
   function handleBasketWorkTypeChange(nextType: "IN" | "OUT") {
     setError(null);
-    if (txBasketItems.length > 0 && nextType !== txBasketType) {
-      setError("현재 작업 품목을 비운 후 작업 유형을 변경할 수 있습니다.");
+    if (nextType === txBasketType) return;
+    if (txBasketItems.length > 0) {
+      setTxBasketWorkTypeConfirm(nextType);
       return;
     }
     setTxBasketWorkType(nextType);
+  }
+
+  function confirmBasketWorkTypeChange() {
+    if (!txBasketWorkTypeConfirm) return;
+    const nextType = txBasketWorkTypeConfirm;
+    setTxBasketItems((prev) =>
+      prev.map((item) => ({
+        ...item,
+        id: buildBasketItemId(item.part.id, nextType, item.isBGrade),
+        txType: nextType,
+      })),
+    );
+    setTxBasketWorkType(nextType);
+    setTxBasketWorkTypeConfirm(null);
   }
 
   function addPartToBasket(part: Part, isBGrade = false, nextType: "IN" | "OUT" = txBasketType) {
@@ -1767,8 +1783,10 @@ export default function ManagementPage() {
 
   function clearTxBasket() {
     setTxBasketItems([]);
+    setTxBasketWorkType("OUT");
     setTxBasketCommonMemo("");
     setTxBasketConfirmOpen(false);
+    setTxBasketWorkTypeConfirm(null);
   }
 
   function openTxBasketConfirm() {
@@ -1864,6 +1882,7 @@ export default function ManagementPage() {
     setTxBasketItems((prev) => prev.filter((item) => !successIds.has(item.id)));
     if (!failed) {
       setTxBasketCommonMemo("");
+      setTxBasketWorkType("OUT");
     }
     setTxBasketConfirmOpen(false);
     setTxBasketResult({ txType: snapshot[0]?.txType ?? txBasketType, results });
@@ -2878,11 +2897,11 @@ export default function ManagementPage() {
               <div className="formRow">
                 <label className="label">작업 유형</label>
                 <div className={`modeToggle ${txBasketType === "OUT" ? "out" : "in"}`}>
-                  <button className={`modeToggleButton ${txBasketType === "IN" ? "active" : ""}`} type="button" onClick={() => handleBasketWorkTypeChange("IN")}>입고</button>
-                  <button className={`modeToggleButton ${txBasketType === "OUT" ? "active out" : ""}`} type="button" onClick={() => handleBasketWorkTypeChange("OUT")}>사용</button>
+                  <button className={`modeToggleButton ${txBasketType === "IN" ? "active" : ""}`} type="button" onClick={() => handleBasketWorkTypeChange("IN")} disabled={txBasketSubmitting}>입고</button>
+                  <button className={`modeToggleButton ${txBasketType === "OUT" ? "active out" : ""}`} type="button" onClick={() => handleBasketWorkTypeChange("OUT")} disabled={txBasketSubmitting}>사용</button>
                 </div>
                 <div className="meta">
-                  {txBasketItems.length > 0 ? "품목이 담긴 상태에서는 작업 유형을 변경할 수 없습니다." : "작업 유형을 먼저 선택한 뒤 품목을 담아주세요."}
+                  {txBasketItems.length > 0 ? "작업 유형을 바꾸면 바구니 품목은 유지됩니다." : "작업 유형을 먼저 선택한 뒤 품목을 담아주세요."}
                 </div>
               </div>
               <div className="formRow">
@@ -4128,6 +4147,33 @@ export default function ManagementPage() {
                 </div>
               ))}
               {locations.length === 0 ? <div className="panelNotice">등록된 위치가 없습니다.</div> : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {txBasketWorkTypeConfirm ? (
+        <div className="scannerOverlay" role="dialog" aria-modal="true" aria-label="작업 유형 변경 확인">
+          <div className="scannerModal">
+            <div className="adminHeaderRow" style={{ marginBottom: 8 }}>
+              <h2 style={{ margin: 0 }}>작업 유형 변경</h2>
+              <button className="btn secondary small" type="button" onClick={() => setTxBasketWorkTypeConfirm(null)}>
+                닫기
+              </button>
+            </div>
+            <div className="scannerGuide">
+              현재 바구니의 작업 유형을 {formatTxModeLabel(txBasketWorkTypeConfirm)}로 변경하시겠습니까?
+            </div>
+            <div className="meta" style={{ marginTop: 8 }}>
+              품목, 수량, 메모, 정상/B급 설정은 그대로 유지됩니다.
+            </div>
+            <div className="actions" style={{ marginTop: 14 }}>
+              <button className="btn" type="button" onClick={confirmBasketWorkTypeChange}>
+                확인
+              </button>
+              <button className="btn secondary" type="button" onClick={() => setTxBasketWorkTypeConfirm(null)}>
+                취소
+              </button>
             </div>
           </div>
         </div>
