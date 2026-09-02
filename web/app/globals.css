@@ -1316,11 +1316,16 @@ th {
   display: grid;
   place-items: center;
   padding: 16px;
+  overflow: auto;
+  overscroll-behavior: contain;
   z-index: 1000;
 }
 
 .scannerModal {
   width: min(680px, 100%);
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  overscroll-behavior: contain;
   background: rgba(255, 253, 250, 0.98);
   border: 1px solid var(--line);
   border-radius: 16px;
@@ -1331,7 +1336,14 @@ th {
 .stockModal {
   width: min(1180px, calc(100vw - 32px));
   max-height: 88vh;
-  overflow: visible;
+  overflow: auto;
+}
+
+/* Any app dialog locks the page while its own content remains scrollable. */
+html:has(.scannerOverlay),
+body:has(.scannerOverlay) {
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 .helpModal {
