@@ -225,18 +225,6 @@ function formatKstDateInput(value?: string | Date) {
   return `${values.get("year")}-${values.get("month")}-${values.get("day")}`;
 }
 
-function formatKstDateTime(value?: string | Date) {
-  return new Date(value || new Date()).toLocaleString("ko-KR", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-}
-
 function createEmptyTxForm(): TxForm {
   return {
     partId: null,
@@ -474,6 +462,7 @@ export default function ManagementPage() {
   const [categories, setCategories] = useState<PartCategory[]>([]);
   const [locations, setLocations] = useState<PartLocation[]>([]);
   const [txHistory, setTxHistory] = useState<StockTransaction[]>([]);
+  const [txHistorySummary, setTxHistorySummary] = useState<StockTransaction[]>([]);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [searchField, setSearchField] = useState<PartSearchField>("all");
@@ -481,7 +470,7 @@ export default function ManagementPage() {
   const [searchPositionFilter, setSearchPositionFilter] = useState<string>("ALL");
   const [searchGroupBy, setSearchGroupBy] = useState<"flat" | "category" | "position">("flat");
   const [searchAssistOpen, setSearchAssistOpen] = useState(true);
-  const [positionSearchOpen, setPositionSearchOpen] = useState(false);
+  const [searchAssistMode, setSearchAssistMode] = useState<"category" | "position">("category");
   const [quickSearchOpen, setQuickSearchOpen] = useState(false);
   const [showLowOnly, setShowLowOnly] = useState(false);
   const [partsSort, setPartsSort] = useState<"item" | "stockAsc" | "stockDesc" | "designation">("item");
@@ -757,27 +746,31 @@ export default function ManagementPage() {
       if (txHistoryGradeFilter !== "ALL") txParams.set("grade", txHistoryGradeFilter);
       if (txHistoryStartDate) txParams.set("from", txHistoryStartDate);
       if (txHistoryEndDate) txParams.set("to", txHistoryEndDate);
-      const [partsRes, txRes, categoriesRes, locationsRes] = await Promise.all([
+      const txHeaders = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined;
+      const [partsRes, txRes, summaryRes, categoriesRes, locationsRes] = await Promise.all([
         fetch("/api/parts", { cache: "no-store" }),
         fetch(`/api/transactions?${txParams.toString()}`, {
           cache: "no-store",
-          headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
+          headers: txHeaders,
         }),
+        fetch(`/api/transactions?page=1&limit=${TX_HISTORY_PAGE_SIZE}`, { cache: "no-store", headers: txHeaders }),
         fetch("/api/categories", { cache: "no-store" }),
         fetch("/api/locations", { cache: "no-store" }),
       ]);
 
       const partsJson = (await partsRes.json()) as { data?: Part[]; error?: string };
       const txJson = (await txRes.json()) as { data?: StockTransaction[]; error?: string; total?: number };
+      const summaryJson = (await summaryRes.json()) as { data?: StockTransaction[]; error?: string; total?: number };
       const categoriesJson = (await categoriesRes.json()) as { data?: PartCategory[]; error?: string };
       const locationsJson = (await locationsRes.json()) as { data?: PartLocation[]; error?: string };
 
-      if (!partsRes.ok || !txRes.ok || !categoriesRes.ok || !locationsRes.ok) {
-        setError(partsJson.error || txJson.error || categoriesJson.error || locationsJson.error || "Failed to load data");
+      if (!partsRes.ok || !txRes.ok || !summaryRes.ok || !categoriesRes.ok || !locationsRes.ok) {
+        setError(partsJson.error || txJson.error || summaryJson.error || categoriesJson.error || locationsJson.error || "Failed to load data");
       } else {
         setParts(partsJson.data || []);
         setTxHistory(txJson.data || []);
         setTxHistoryTotal(txJson.total ?? (txJson.data || []).length);
+        setTxHistorySummary(summaryJson.data || []);
         setCategories(categoriesJson.data || []);
         setLocations(locationsJson.data || []);
       }
@@ -1462,16 +1455,16 @@ export default function ManagementPage() {
     });
   }, [txHistory, txHistoryFilter, txHistoryGradeFilter, txHistorySearch]);
   const txHistoryTotalPages = Math.max(1, Math.ceil(txHistoryTotal / TX_HISTORY_PAGE_SIZE));
-  const adjustHistoryCount = useMemo(() => txHistory.filter((tx) => tx.tx_type === "ADJUST").length, [txHistory]);
+  const adjustHistoryCount = useMemo(() => txHistorySummary.filter((tx) => tx.tx_type === "ADJUST").length, [txHistorySummary]);
   const latestHistoryActor = useMemo(() => {
-    const latest = txHistory[0];
+    const latest = txHistorySummary[0];
     if (!latest) return null;
     return {
       actor: latest.actor_name || "알 수 없음",
       createdAt: latest.created_at,
       item: latest.parts?.designation || latest.parts?.item_number || "품목 정보 없음",
     };
-  }, [txHistory]);
+  }, [txHistorySummary]);
   const recentDatesByPart = useMemo(() => {
     const dates = new Map<string, { lastIn?: string; lastOut?: string }>();
     for (const tx of txHistory) {
@@ -1508,8 +1501,8 @@ export default function ManagementPage() {
   }, [filteredParts, searchGroupBy]);
   const todayHistory = useMemo(() => {
     const today = formatKstDateInput();
-    return txHistory.filter((tx) => formatKstDateInput(tx.created_at) === today);
-  }, [txHistory]);
+    return txHistorySummary.filter((tx) => formatKstDateInput(tx.created_at) === today);
+  }, [txHistorySummary]);
   useEffect(() => {
     if (search.trim().length > 0) {
       setSearchAssistOpen(true);
@@ -1583,6 +1576,26 @@ export default function ManagementPage() {
   function clearSearchAssistFilters() {
     setSearchCategoryFilter("ALL");
     setSearchPositionFilter("ALL");
+    setSearchAssistMode("category");
+  }
+
+  function clearTxHistoryFilters() {
+    setTxHistorySearch("");
+    setTxHistoryFilter("ALL");
+    setTxHistoryGradeFilter("ALL");
+    setTxHistoryPeriod("ALL");
+    setTxHistoryStartDate("");
+    setTxHistoryEndDate("");
+    setTxHistoryPage(1);
+  }
+
+  function selectSearchAssistMode(mode: "category" | "position") {
+    setSearchAssistMode(mode);
+    if (mode === "category") {
+      setSearchPositionFilter("ALL");
+    } else {
+      setSearchCategoryFilter("ALL");
+    }
   }
 
   function chooseTxPart(part: Part, nextType?: "IN" | "OUT") {
@@ -2475,14 +2488,14 @@ export default function ManagementPage() {
         </button>
         <button className="statCard statCardButton spotlight todayFlow" type="button" onClick={() => openTxHistoryModal()}>
           <div className="meta">입고/사용 이력</div>
-          <div className="statValue">{txHistoryTotal || txHistory.length}</div>
+          <div className="statValue">기록 조회</div>
           <div className="meta">오늘 {todayHistory.length}건 · 전체 기록 조회</div>
         </button>
         <div className="statCard spotlight latestTouch">
           <div className="meta">최근 상태</div>
           <div className="statValue">{latestHistoryActor?.item || "최근 작업 없음"}</div>
           <div className="meta">{latestHistoryActor ? `마지막 수정자 ${latestHistoryActor.actor}` : "마지막 수정자 정보 없음"}</div>
-          <div className="meta">{latestHistoryActor ? `수정일시 ${formatKstDateTime(latestHistoryActor.createdAt)}` : "수정일시 정보 없음"}</div>
+          <div className="meta">{latestHistoryActor ? `수정일 ${formatDisplayDate(latestHistoryActor.createdAt)}` : "수정일 정보 없음"}</div>
         </div>
       </section>
 
@@ -2712,8 +2725,17 @@ export default function ManagementPage() {
             </div>
             {searchAssistOpen ? (
               <>
+                <div className="modeToggle searchAssistModeToggle" aria-label="구분 또는 위치 검색 선택">
+                  <button className={`modeToggleButton ${searchAssistMode === "category" ? "active" : ""}`} type="button" onClick={() => selectSearchAssistMode("category")}>
+                    구분 검색
+                  </button>
+                  <button className={`modeToggleButton ${searchAssistMode === "position" ? "active" : ""}`} type="button" onClick={() => selectSearchAssistMode("position")}>
+                    위치 검색
+                  </button>
+                </div>
                 <div className="searchAssistGrid">
-                  <div>
+                  {searchAssistMode === "category" ? (
+                    <div>
                     <div className="meta" style={{ marginBottom: 8 }}>구분</div>
                     <div className="filterChips">
                       <button className={`btn secondary small ${searchCategoryFilter === "ALL" ? "activeChoice" : ""}`} type="button" onClick={() => setSearchCategoryFilter("ALL")}>
@@ -2730,15 +2752,10 @@ export default function ManagementPage() {
                         </button>
                       ))}
                     </div>
-                  </div>
-                  <div>
-                    <div className="inlineLabelRow">
-                      <div className="meta">위치</div>
-                      <button className="btn secondary small" type="button" onClick={() => setPositionSearchOpen((value) => !value)}>
-                        {positionSearchOpen ? "위치 접기" : "위치 펼치기"}
-                      </button>
                     </div>
-                    {positionSearchOpen ? (
+                  ) : (
+                    <div>
+                      <div className="meta" style={{ marginBottom: 8 }}>위치</div>
                       <div className="filterChips">
                         <button className={`btn secondary small ${searchPositionFilter === "ALL" ? "activeChoice" : ""}`} type="button" onClick={() => setSearchPositionFilter("ALL")}>
                           전체
@@ -2754,10 +2771,8 @@ export default function ManagementPage() {
                           </button>
                         ))}
                       </div>
-                    ) : (
-                      <div className="meta">필요할 때만 위치 검색을 펼쳐 사용하세요.</div>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
                 <div className="formRow" style={{ marginTop: 12, marginBottom: 0 }}>
                   <div className="meta">결과 묶음 보기</div>
@@ -3090,7 +3105,7 @@ export default function ManagementPage() {
             <div className="adminHeaderRow">
               <h2 style={{ margin: 0 }}>입고/사용 이력</h2>
               <div className="meta">
-                {txHistoryPage} / {txHistoryTotalPages} 페이지 · 전체 {txHistoryTotal}건 · 현재 표시 {filteredTxHistory.length}건
+                {txHistoryPage} / {txHistoryTotalPages} 페이지 · 현재 표시 {filteredTxHistory.length}건
               </div>
             </div>
             <section className="quickStatsPanel" style={{ marginBottom: 12 }}>
@@ -3100,11 +3115,11 @@ export default function ManagementPage() {
               </div>
               <div className="quickStatCard">
                 <div className="meta">최근 입고 기록</div>
-                <strong>{txHistory.filter((tx) => tx.tx_type === "IN").length}건</strong>
+                <strong>{txHistorySummary.filter((tx) => tx.tx_type === "IN").length}건</strong>
               </div>
               <div className="quickStatCard">
                 <div className="meta">최근 사용 기록</div>
-                <strong>{txHistory.filter((tx) => tx.tx_type === "OUT").length}건</strong>
+                <strong>{txHistorySummary.filter((tx) => tx.tx_type === "OUT").length}건</strong>
               </div>
               <div className="quickStatCard">
                 <div className="meta">수정내역 누적</div>
@@ -3119,6 +3134,9 @@ export default function ManagementPage() {
                 value={txHistorySearch}
                 onChange={(e) => setTxHistorySearch(e.target.value)}
               />
+              <button className="btn secondary" type="button" onClick={clearTxHistoryFilters}>
+                초기화
+              </button>
             </div>
             <div className="filterChips" aria-label="최근 이력 필터" style={{ marginBottom: 12 }}>
               <button className={`btn secondary small ${txHistoryFilter === "ALL" ? "activeChoice" : ""}`} type="button" onClick={() => setTxHistoryFilter("ALL")}>

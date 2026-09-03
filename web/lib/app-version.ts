@@ -6,9 +6,19 @@ export type ReleaseNote = {
 };
 
 export const RELEASE_NOTES_FORCE_OPEN_KEY = "inventory_release_notes_force_open_version";
-export const APP_VERSION = "v2.1.0";
+export const APP_VERSION = "v2.1.1";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
+  {
+    version: "v2.1.1",
+    date: "2026-09-04",
+    summary: "이력 목록 페이지 이동과 구분·위치 검색 흐름을 더 분명하게 정리했습니다.",
+    items: [
+      "입고/사용 이력의 페이지 이동이 목록에만 적용되도록 분리해 최근 상태와 요약 정보가 바뀌지 않게 했습니다.",
+      "이력 필터와 검색어를 한 번에 비우는 초기화 버튼을 추가하고, 화면의 전체 이력 건수 표시는 제거했습니다.",
+      "구분 검색과 위치 검색을 하나의 선택 영역에서 전환하도록 바꾸고, 최근 상태의 수정일은 날짜만 표시하도록 정리했습니다.",
+    ],
+  },
   {
     version: "v2.1.0",
     date: "2026-09-04",

@@ -190,8 +190,19 @@ a {
 
 .searchAssistGrid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 12px;
+}
+
+.searchAssistModeToggle {
+  max-width: 440px;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.searchAssistModeToggle .modeToggleButton {
+  min-height: 44px;
+  white-space: nowrap;
 }
 
 .groupedResults {
@@ -1911,6 +1922,10 @@ body:has(.scannerOverlay) {
   .segmentedToggle,
   .modeToggle {
     grid-template-columns: 1fr;
+  }
+
+  .searchAssistModeToggle {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .inventoryManagementGrid {
