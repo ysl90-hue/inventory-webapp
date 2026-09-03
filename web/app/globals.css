@@ -32,7 +32,7 @@ a {
 }
 
 .page {
-  max-width: 1100px;
+  max-width: 1440px;
   margin: 0 auto;
   padding: 32px 16px 64px;
 }
@@ -868,6 +868,13 @@ tr.activeSelection {
   font-weight: 700;
 }
 
+.latestTouch .statValue {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 1.05rem;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -1333,10 +1340,43 @@ th {
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.18);
 }
 
+.scannerModal > .adminHeaderRow:first-child {
+  position: sticky;
+  top: -14px;
+  z-index: 5;
+  margin: -14px -14px 12px;
+  padding: 14px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 253, 250, 0.98);
+}
+
 .stockModal {
   width: min(1180px, calc(100vw - 32px));
   max-height: 88vh;
   overflow: auto;
+}
+
+.partHistoryModal {
+  width: min(760px, calc(100vw - 32px));
+}
+
+@media (min-width: 1200px) {
+  .page {
+    padding-inline: 24px;
+  }
+
+  .statsGrid {
+    gap: 14px;
+  }
+
+  .statCard {
+    padding: 16px 18px;
+  }
+
+  .inventoryManagementGrid {
+    grid-template-columns: minmax(0, 1.45fr) minmax(360px, 0.9fr);
+    gap: 18px;
+  }
 }
 
 /* Any app dialog locks the page while its own content remains scrollable. */
@@ -1797,10 +1837,20 @@ body:has(.scannerOverlay) {
     overflow: auto;
   }
 
+  .scannerModal > .adminHeaderRow:first-child {
+    top: -12px;
+    margin: -12px -12px 12px;
+    padding: 12px;
+  }
+
   .stockModal {
     width: 100%;
     max-height: 90svh;
     overflow: auto;
+  }
+
+  .partHistoryModal {
+    width: 100%;
   }
 
   .manageModal {

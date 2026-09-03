@@ -130,7 +130,7 @@ const HELP_SECTIONS = [
     title: "메뉴 안내",
     items: [
       "재고관리: 등록된 품목을 검색하고, 선택한 품목을 입고 또는 사용 처리하며 작업 바구니에 담는 화면입니다.",
-      "입출고 이력: 최근 입고/사용 내역을 검색하고 수정 또는 삭제할 수 있는 큰 팝업입니다.",
+      "입고/사용 이력: 최근 입고/사용 내역을 검색하고 수정 또는 삭제할 수 있는 큰 팝업입니다.",
       "상단 입고 등록된 품목 수치를 누르면 품종등록된 전체 품목을 팝업으로 확인하고 검색하거나 정렬할 수 있습니다.",
       "품종등록: 신규 품목 등록, 기존 품목 수정, 구분 관리, 위치 관리를 진행하는 화면입니다.",
     ],
@@ -153,7 +153,7 @@ const HELP_SECTIONS = [
       "검색창에서도 바코드/QR 스캔이 가능하며, 스캔값이 바로 검색어로 입력됩니다.",
       "검색 결과에는 품목번호, 품명, 메모, 재고, 단위, 위치가 표시됩니다.",
       "검색 결과에서 선택 버튼을 누르면 해당 품목이 작업 바구니에 바로 담깁니다.",
-      "검색 결과에서 재고 수량을 누르면 입출고 이력 팝업이 열리고 해당 품목의 최근 이력을 확인할 수 있습니다.",
+      "검색 결과에서 재고 수량을 누르면 선택 품목 최근 이력 팝업이 열립니다.",
       "검색 결과가 없으면 검색 조건을 전체로 바꿔 다시 검색해 보는 것이 좋습니다.",
     ],
   },
@@ -170,10 +170,10 @@ const HELP_SECTIONS = [
     ],
   },
   {
-    title: "입출고 이력",
+    title: "입고/사용 이력",
     items: [
       "최근 이력에서는 입고/사용 내역의 구분, 품목번호, 품명, 메모, 날짜, 사용자명을 확인할 수 있습니다.",
-      "재고관리 화면에서는 재고 수량을 눌러 입출고 이력 팝업에서 해당 품목의 최근 이력을 따로 볼 수 있습니다.",
+      "재고관리 화면에서는 재고 수량을 눌러 선택 품목 최근 이력을 따로 볼 수 있습니다.",
       "최근 이력 수정에서는 수량, 메모, B급 여부뿐 아니라 날짜도 변경할 수 있습니다.",
       "수정은 로그인한 사용자도 가능하지만, 삭제는 관리자만 가능합니다.",
       "보정 이력(ADJUST)은 수정하거나 삭제할 수 없습니다.",
@@ -210,7 +210,31 @@ function formatDateInput(value?: string | Date) {
 }
 
 function formatDisplayDate(value?: string | Date) {
-  return new Date(value || new Date()).toLocaleDateString("ko-KR");
+  return new Date(value || new Date()).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" });
+}
+
+function formatKstDateInput(value?: string | Date) {
+  const date = new Date(value || new Date());
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const values = new Map(parts.map((part) => [part.type, part.value]));
+  return `${values.get("year")}-${values.get("month")}-${values.get("day")}`;
+}
+
+function formatKstDateTime(value?: string | Date) {
+  return new Date(value || new Date()).toLocaleString("ko-KR", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
 }
 
 function createEmptyTxForm(): TxForm {
@@ -263,11 +287,6 @@ function formatSplitStock(part: Part) {
   const normal = Number(part.normal_stock ?? part.current_stock ?? 0);
   const bGrade = Number(part.b_grade_stock ?? 0);
   return `${normal} (B급 ${bGrade})`;
-}
-
-function formatTransactionSplitQty(tx: StockTransaction) {
-  const qty = Number(tx.qty || 0);
-  return tx.is_b_grade ? `0 (B급 ${qty})` : `${qty} (B급 0)`;
 }
 
 function formatTxTypeLabel(txType: "IN" | "OUT" | "ADJUST") {
@@ -462,6 +481,7 @@ export default function ManagementPage() {
   const [searchPositionFilter, setSearchPositionFilter] = useState<string>("ALL");
   const [searchGroupBy, setSearchGroupBy] = useState<"flat" | "category" | "position">("flat");
   const [searchAssistOpen, setSearchAssistOpen] = useState(true);
+  const [positionSearchOpen, setPositionSearchOpen] = useState(false);
   const [quickSearchOpen, setQuickSearchOpen] = useState(false);
   const [showLowOnly, setShowLowOnly] = useState(false);
   const [partsSort, setPartsSort] = useState<"item" | "stockAsc" | "stockDesc" | "designation">("item");
@@ -505,13 +525,16 @@ export default function ManagementPage() {
   const [txHistorySearch, setTxHistorySearch] = useState("");
   const [txHistoryFilter, setTxHistoryFilter] = useState<TxHistoryFilter>("ALL");
   const [txHistoryGradeFilter, setTxHistoryGradeFilter] = useState<TxHistoryGradeFilter>("ALL");
-  const [txHistoryOnlySelectedPart, setTxHistoryOnlySelectedPart] = useState(false);
   const [txHistoryModalOpen, setTxHistoryModalOpen] = useState(false);
   const [txHistoryPage, setTxHistoryPage] = useState(1);
   const [txHistoryTotal, setTxHistoryTotal] = useState(0);
   const [txHistoryPeriod, setTxHistoryPeriod] = useState<TxHistoryPeriod>("ALL");
   const [txHistoryStartDate, setTxHistoryStartDate] = useState("");
   const [txHistoryEndDate, setTxHistoryEndDate] = useState("");
+  const [partHistoryModalOpen, setPartHistoryModalOpen] = useState(false);
+  const [partHistoryPart, setPartHistoryPart] = useState<Part | null>(null);
+  const [partHistoryItems, setPartHistoryItems] = useState<StockTransaction[]>([]);
+  const [partHistoryLoading, setPartHistoryLoading] = useState(false);
   const [labelPrintParts, setLabelPrintParts] = useState<Part[]>([]);
   const [labelPrintMode, setLabelPrintMode] = useState<"qr" | "barcode">("qr");
   const [selectedLabelPartIds, setSelectedLabelPartIds] = useState<Set<string>>(() => new Set());
@@ -734,7 +757,6 @@ export default function ManagementPage() {
       if (txHistoryGradeFilter !== "ALL") txParams.set("grade", txHistoryGradeFilter);
       if (txHistoryStartDate) txParams.set("from", txHistoryStartDate);
       if (txHistoryEndDate) txParams.set("to", txHistoryEndDate);
-      if (txHistoryOnlySelectedPart && selectedPart?.id) txParams.set("partId", selectedPart.id);
       const [partsRes, txRes, categoriesRes, locationsRes] = await Promise.all([
         fetch("/api/parts", { cache: "no-store" }),
         fetch(`/api/transactions?${txParams.toString()}`, {
@@ -1019,11 +1041,11 @@ export default function ManagementPage() {
 
   useEffect(() => {
     void loadData();
-  }, [session?.access_token, txForm.partId, txHistoryEndDate, txHistoryFilter, txHistoryGradeFilter, txHistoryOnlySelectedPart, txHistoryPage, txHistoryStartDate]);
+  }, [session?.access_token, txHistoryEndDate, txHistoryFilter, txHistoryGradeFilter, txHistoryPage, txHistoryStartDate]);
 
   useEffect(() => {
     setTxHistoryPage(1);
-  }, [txForm.partId, txHistoryEndDate, txHistoryFilter, txHistoryGradeFilter, txHistoryOnlySelectedPart, txHistorySearch, txHistoryStartDate]);
+  }, [txHistoryEndDate, txHistoryFilter, txHistoryGradeFilter, txHistorySearch, txHistoryStartDate]);
 
   useEffect(() => {
     let mounted = true;
@@ -1406,12 +1428,6 @@ export default function ManagementPage() {
   const selectedPart =
     (txForm.partId ? parts.find((part) => part.id === txForm.partId) : null) ||
     (matchedTxParts.length === 1 ? matchedTxParts[0] : null);
-  const selectedPartRecentHistory = useMemo(() => {
-    if (!selectedPart) return [];
-    return txHistory
-      .filter((tx) => tx.part_id === selectedPart.id || tx.parts?.id === selectedPart.id)
-      .slice(0, 5);
-  }, [selectedPart, txHistory]);
   const currentEditingTransaction = useMemo(() => {
     if (!txEditForm) return null;
     return txHistory.find((tx) => tx.id === txEditForm.id) || null;
@@ -1432,10 +1448,6 @@ export default function ManagementPage() {
       if (txHistoryFilter !== "ALL" && tx.tx_type !== txHistoryFilter) return false;
       if (txHistoryGradeFilter === "NORMAL" && tx.is_b_grade) return false;
       if (txHistoryGradeFilter === "B_GRADE" && !tx.is_b_grade) return false;
-      if (txHistoryOnlySelectedPart && selectedPart) {
-        const historyPartId = tx.part_id || tx.parts?.id;
-        if (historyPartId !== selectedPart.id) return false;
-      }
       if (!keyword) return true;
       const createdAt = new Date(tx.created_at).toLocaleDateString("ko-KR").toLowerCase();
       return (
@@ -1448,7 +1460,7 @@ export default function ManagementPage() {
         (tx.is_b_grade ? "b급" : "정상품").includes(keyword)
       );
     });
-  }, [selectedPart, txHistory, txHistoryFilter, txHistoryGradeFilter, txHistoryOnlySelectedPart, txHistorySearch]);
+  }, [txHistory, txHistoryFilter, txHistoryGradeFilter, txHistorySearch]);
   const txHistoryTotalPages = Math.max(1, Math.ceil(txHistoryTotal / TX_HISTORY_PAGE_SIZE));
   const adjustHistoryCount = useMemo(() => txHistory.filter((tx) => tx.tx_type === "ADJUST").length, [txHistory]);
   const latestHistoryActor = useMemo(() => {
@@ -1457,7 +1469,20 @@ export default function ManagementPage() {
     return {
       actor: latest.actor_name || "알 수 없음",
       createdAt: latest.created_at,
+      item: latest.parts?.designation || latest.parts?.item_number || "품목 정보 없음",
     };
+  }, [txHistory]);
+  const recentDatesByPart = useMemo(() => {
+    const dates = new Map<string, { lastIn?: string; lastOut?: string }>();
+    for (const tx of txHistory) {
+      const partId = tx.part_id || tx.parts?.id;
+      if (!partId || (tx.tx_type !== "IN" && tx.tx_type !== "OUT")) continue;
+      const current = dates.get(partId) || {};
+      if (tx.tx_type === "IN" && !current.lastIn) current.lastIn = tx.created_at;
+      if (tx.tx_type === "OUT" && !current.lastOut) current.lastOut = tx.created_at;
+      dates.set(partId, current);
+    }
+    return dates;
   }, [txHistory]);
   const groupedFilteredParts = useMemo(() => {
     if (searchGroupBy === "flat") {
@@ -1482,17 +1507,9 @@ export default function ManagementPage() {
       }));
   }, [filteredParts, searchGroupBy]);
   const todayHistory = useMemo(() => {
-    const today = formatDateInput();
-    return txHistory.filter((tx) => formatDateInput(tx.created_at) === today);
+    const today = formatKstDateInput();
+    return txHistory.filter((tx) => formatKstDateInput(tx.created_at) === today);
   }, [txHistory]);
-  const todayInQty = useMemo(
-    () => todayHistory.filter((tx) => tx.tx_type === "IN").reduce((sum, tx) => sum + Number(tx.qty || 0), 0),
-    [todayHistory],
-  );
-  const todayOutQty = useMemo(
-    () => todayHistory.filter((tx) => tx.tx_type === "OUT").reduce((sum, tx) => sum + Number(tx.qty || 0), 0),
-    [todayHistory],
-  );
   useEffect(() => {
     if (search.trim().length > 0) {
       setSearchAssistOpen(true);
@@ -1559,6 +1576,11 @@ export default function ManagementPage() {
     setSearchInput("");
     setSearch("");
     setShowLowOnly(false);
+    setSearchCategoryFilter("ALL");
+    setSearchPositionFilter("ALL");
+  }
+
+  function clearSearchAssistFilters() {
     setSearchCategoryFilter("ALL");
     setSearchPositionFilter("ALL");
   }
@@ -1893,24 +1915,45 @@ export default function ManagementPage() {
     setTxBasketSubmitting(false);
   }
 
-  function openTxHistoryModal(part?: Part) {
-    if (part) {
-      chooseTxPart(part);
-      setTxHistoryOnlySelectedPart(true);
-    } else {
-      setTxHistoryOnlySelectedPart(false);
-    }
+  function openTxHistoryModal() {
     setTxHistoryPage(1);
     setTxHistoryModalOpen(true);
   }
 
-  function openPartHistory(part: Part) {
-    openTxHistoryModal(part);
+  function closePartHistory() {
+    setPartHistoryModalOpen(false);
+    setPartHistoryPart(null);
+    setPartHistoryItems([]);
+    setPartHistoryLoading(false);
+  }
+
+  async function openPartHistory(part: Part) {
+    setPartHistoryPart(part);
+    setPartHistoryItems([]);
+    setPartHistoryLoading(true);
+    setPartHistoryModalOpen(true);
+    try {
+      const params = new URLSearchParams({ page: "1", limit: "20", partId: part.id });
+      const res = await fetch(`/api/transactions?${params.toString()}`, {
+        cache: "no-store",
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
+      });
+      const json = (await res.json()) as { data?: StockTransaction[]; error?: string };
+      if (!res.ok) {
+        setError(json.error || "선택 품목 이력을 불러오지 못했습니다.");
+        return;
+      }
+      setPartHistoryItems(json.data || []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "선택 품목 이력을 불러오지 못했습니다.");
+    } finally {
+      setPartHistoryLoading(false);
+    }
   }
 
   function applyTxHistoryPeriod(period: TxHistoryPeriod) {
     const today = new Date();
-    const end = formatDateInput(today);
+    const end = formatKstDateInput(today);
     let start = "";
 
     if (period === "TODAY") {
@@ -1918,15 +1961,15 @@ export default function ManagementPage() {
     } else if (period === "7D") {
       const date = new Date(today);
       date.setDate(date.getDate() - 6);
-      start = formatDateInput(date);
+      start = formatKstDateInput(date);
     } else if (period === "30D") {
       const date = new Date(today);
       date.setDate(date.getDate() - 29);
-      start = formatDateInput(date);
+      start = formatKstDateInput(date);
     } else if (period === "3M") {
       const date = new Date(today);
       date.setMonth(date.getMonth() - 3);
-      start = formatDateInput(date);
+      start = formatKstDateInput(date);
     }
 
     setTxHistoryPeriod(period);
@@ -2431,14 +2474,15 @@ export default function ManagementPage() {
           <div className="meta">최소재고 이하 품목 확인</div>
         </button>
         <button className="statCard statCardButton spotlight todayFlow" type="button" onClick={() => openTxHistoryModal()}>
-          <div className="meta">입출고 이력</div>
+          <div className="meta">입고/사용 이력</div>
           <div className="statValue">{txHistoryTotal || txHistory.length}</div>
           <div className="meta">오늘 {todayHistory.length}건 · 전체 기록 조회</div>
         </button>
         <div className="statCard spotlight latestTouch">
           <div className="meta">최근 상태</div>
-          <div className="statValue">{isMobileLayout ? "Mobile" : "Desktop"}</div>
-          <div className="meta">{latestHistoryActor ? `${latestHistoryActor.actor} 작업 기록` : "최근 작업 없음"}</div>
+          <div className="statValue">{latestHistoryActor?.item || "최근 작업 없음"}</div>
+          <div className="meta">{latestHistoryActor ? `마지막 수정자 ${latestHistoryActor.actor}` : "마지막 수정자 정보 없음"}</div>
+          <div className="meta">{latestHistoryActor ? `수정일시 ${formatKstDateTime(latestHistoryActor.createdAt)}` : "수정일시 정보 없음"}</div>
         </div>
       </section>
 
@@ -2657,9 +2701,14 @@ export default function ManagementPage() {
                     : "기본으로 펼쳐져 있으며 구분이나 위치 선택만으로 품목 목록을 볼 수 있습니다."}
                 </div>
               </div>
-              <button className="btn secondary small" type="button" onClick={() => setSearchAssistOpen((value) => !value)}>
-                {searchAssistOpen ? "접기" : "펼치기"}
-              </button>
+              <div className="actions">
+                <button className="btn secondary small" type="button" onClick={clearSearchAssistFilters}>
+                  초기화
+                </button>
+                <button className="btn secondary small" type="button" onClick={() => setSearchAssistOpen((value) => !value)}>
+                  {searchAssistOpen ? "접기" : "펼치기"}
+                </button>
+              </div>
             </div>
             {searchAssistOpen ? (
               <>
@@ -2683,22 +2732,31 @@ export default function ManagementPage() {
                     </div>
                   </div>
                   <div>
-                    <div className="meta" style={{ marginBottom: 8 }}>위치</div>
-                    <div className="filterChips">
-                      <button className={`btn secondary small ${searchPositionFilter === "ALL" ? "activeChoice" : ""}`} type="button" onClick={() => setSearchPositionFilter("ALL")}>
-                        전체
+                    <div className="inlineLabelRow">
+                      <div className="meta">위치</div>
+                      <button className="btn secondary small" type="button" onClick={() => setPositionSearchOpen((value) => !value)}>
+                        {positionSearchOpen ? "위치 접기" : "위치 펼치기"}
                       </button>
-                      {searchPositionOptions.slice(0, 10).map(([code, count]) => (
-                        <button
-                          key={code}
-                          className={`btn secondary small ${searchPositionFilter === code ? "activeChoice" : ""}`}
-                          type="button"
-                          onClick={() => setSearchPositionFilter(code)}
-                        >
-                          {code} {count}
-                        </button>
-                      ))}
                     </div>
+                    {positionSearchOpen ? (
+                      <div className="filterChips">
+                        <button className={`btn secondary small ${searchPositionFilter === "ALL" ? "activeChoice" : ""}`} type="button" onClick={() => setSearchPositionFilter("ALL")}>
+                          전체
+                        </button>
+                        {searchPositionOptions.slice(0, 10).map(([code, count]) => (
+                          <button
+                            key={code}
+                            className={`btn secondary small ${searchPositionFilter === code ? "activeChoice" : ""}`}
+                            type="button"
+                            onClick={() => setSearchPositionFilter(code)}
+                          >
+                            {code} {count}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="meta">필요할 때만 위치 검색을 펼쳐 사용하세요.</div>
+                    )}
                   </div>
                 </div>
                 <div className="formRow" style={{ marginTop: 12, marginBottom: 0 }}>
@@ -2733,7 +2791,7 @@ export default function ManagementPage() {
             <div className="badgeRow searchLegendRow">
               <span className="softBadge warn">부족 재고는 빨간 강조로 표시됩니다.</span>
               <span className="softBadge">선택 버튼으로 작업 바구니 추가</span>
-              <span className="softBadge">재고 배지를 누르면 입출고 이력 확인</span>
+              <span className="softBadge">재고 배지를 누르면 최근 이력 확인</span>
             </div>
             {isMobileLayout ? (
               <div className="groupedResults">
@@ -3017,47 +3075,20 @@ export default function ManagementPage() {
       ) : null}
 
       {txHistoryModalOpen ? (
-        <div className="scannerOverlay" role="dialog" aria-modal="true" aria-label="입출고 이력">
+        <div className="scannerOverlay" role="dialog" aria-modal="true" aria-label="입고/사용 이력">
           <div className="scannerModal stockModal txHistoryDialog">
             <div className="adminHeaderRow" style={{ marginBottom: 12 }}>
               <div>
-                <h2 style={{ margin: 0 }}>입출고 이력</h2>
+                <h2 style={{ margin: 0 }}>입고/사용 이력</h2>
                 <div className="meta">100건씩 최신순으로 조회하며 다음 페이지로 과거 기록을 볼 수 있습니다.</div>
               </div>
               <button className="btn secondary small" type="button" onClick={() => setTxHistoryModalOpen(false)}>
                 닫기
               </button>
             </div>
-          {selectedPart ? (
-            <section className="panel" style={{ marginBottom: 16 }}>
-              <div className="adminHeaderRow">
-                <h2 style={{ margin: 0 }}>선택 품목 최근 이력</h2>
-                <div className="actions">
-                  <button className="btn secondary small" type="button" onClick={() => openPartHistory(selectedPart)}>
-                    전체 이력 보기
-                  </button>
-                </div>
-              </div>
-              <div className="historyMiniList">
-                {selectedPartRecentHistory.map((tx) => (
-                  <div key={tx.id} className="historyMiniItem">
-                    <div className="historyMiniHead">
-                      <span className={`txBadge ${tx.tx_type === "OUT" ? "out" : "in"}`}>{formatTxTypeLabel(tx.tx_type)}</span>
-                      <strong>{formatDisplayDate(tx.created_at)}</strong>
-                    </div>
-                    <div>{formatTransactionSplitQty(tx)}</div>
-                    <div className="meta">{tx.actor_name || "기록자 없음"} · {tx.is_b_grade ? "B급" : "정상품"}</div>
-                    <div className="meta">{tx.memo || "메모 없음"}</div>
-                  </div>
-                ))}
-                {selectedPartRecentHistory.length === 0 ? <div className="panelNotice">이 품목의 최근 이력이 없습니다.</div> : null}
-              </div>
-            </section>
-          ) : null}
-
             <section className="panel">
             <div className="adminHeaderRow">
-              <h2 style={{ margin: 0 }}>입출고 이력</h2>
+              <h2 style={{ margin: 0 }}>입고/사용 이력</h2>
               <div className="meta">
                 {txHistoryPage} / {txHistoryTotalPages} 페이지 · 전체 {txHistoryTotal}건 · 현재 표시 {filteredTxHistory.length}건
               </div>
@@ -3068,12 +3099,12 @@ export default function ManagementPage() {
                 <strong>{todayHistory.length}건</strong>
               </div>
               <div className="quickStatCard">
-                <div className="meta">오늘 입고 수량</div>
-                <strong>{todayInQty}</strong>
+                <div className="meta">최근 입고 기록</div>
+                <strong>{txHistory.filter((tx) => tx.tx_type === "IN").length}건</strong>
               </div>
               <div className="quickStatCard">
-                <div className="meta">오늘 사용 수량</div>
-                <strong>{todayOutQty}</strong>
+                <div className="meta">최근 사용 기록</div>
+                <strong>{txHistory.filter((tx) => tx.tx_type === "OUT").length}건</strong>
               </div>
               <div className="quickStatCard">
                 <div className="meta">수정내역 누적</div>
@@ -3098,15 +3129,6 @@ export default function ManagementPage() {
               <button className={`btn secondary small ${txHistoryFilter === "ADJUST" ? "activeChoice" : ""}`} type="button" onClick={() => setTxHistoryFilter("ADJUST")}>
                 수정내역
               </button>
-              {selectedPart ? (
-                <button
-                  className={`btn secondary small ${txHistoryOnlySelectedPart ? "activeChoice" : ""}`}
-                  type="button"
-                  onClick={() => setTxHistoryOnlySelectedPart((value) => !value)}
-                >
-                  {txHistoryOnlySelectedPart ? "선택 품목만" : "전체 품목"}
-                </button>
-              ) : null}
             </div>
             <div className="filterChips" aria-label="최근 이력 등급 필터" style={{ marginBottom: 12 }}>
               <button className={`btn secondary small ${txHistoryGradeFilter === "ALL" ? "activeChoice" : ""}`} type="button" onClick={() => setTxHistoryGradeFilter("ALL")}>
@@ -3180,19 +3202,17 @@ export default function ManagementPage() {
                     </div>
                     <div>{tx.parts?.designation || "-"}</div>
                     <div className="badgeRow">
-                      <span className="softBadge">{formatTransactionSplitQty(tx)}</span>
                       <span className="softBadge">{tx.parts?.location || "구분 없음"}</span>
                       <span className={`softBadge ${tx.tx_type === "ADJUST" ? "warn" : ""}`}>{tx.actor_name || "기록자 없음"}</span>
-                      {tx.parts?.item_number && selectedPart && tx.parts.item_number === selectedPart.item_number ? <span className="softBadge">선택 품목</span> : null}
                     </div>
                     <div className="kvGrid">
                       <div>
-                        <span className="meta">수량</span>
-                        <div>{formatTransactionSplitQty(tx)}</div>
+                        <span className="meta">최근 입고 등록일</span>
+                        <div>{recentDatesByPart.get(tx.part_id || tx.parts?.id || "")?.lastIn ? formatDisplayDate(recentDatesByPart.get(tx.part_id || tx.parts?.id || "")?.lastIn) : "-"}</div>
                       </div>
                       <div>
-                        <span className="meta">날짜</span>
-                        <div>{formatDisplayDate(tx.created_at)}</div>
+                        <span className="meta">최근 사용일</span>
+                        <div>{recentDatesByPart.get(tx.part_id || tx.parts?.id || "")?.lastOut ? formatDisplayDate(recentDatesByPart.get(tx.part_id || tx.parts?.id || "")?.lastOut) : "-"}</div>
                       </div>
                       <div>
                         <span className="meta">메모</span>
@@ -3227,7 +3247,7 @@ export default function ManagementPage() {
                       <th>품목번호</th>
                       <th>품명</th>
                       <th>카테고리</th>
-                      <th>수량</th>
+                      <th>최근 입고 / 사용</th>
                       <th>메모</th>
                       <th>날짜</th>
                       <th>사용자</th>
@@ -3243,7 +3263,10 @@ export default function ManagementPage() {
                         <td>{tx.parts?.item_number || "-"}</td>
                         <td>{tx.parts?.designation || "-"}</td>
                         <td>{tx.parts?.location || "-"}</td>
-                        <td>{formatTransactionSplitQty(tx)}</td>
+                        <td>
+                          <div>입고 {recentDatesByPart.get(tx.part_id || tx.parts?.id || "")?.lastIn ? formatDisplayDate(recentDatesByPart.get(tx.part_id || tx.parts?.id || "")?.lastIn) : "-"}</div>
+                          <div>사용 {recentDatesByPart.get(tx.part_id || tx.parts?.id || "")?.lastOut ? formatDisplayDate(recentDatesByPart.get(tx.part_id || tx.parts?.id || "")?.lastOut) : "-"}</div>
+                        </td>
                         <td>{tx.memo || "-"}</td>
                         <td>{formatDisplayDate(tx.created_at)}</td>
                         <td>{tx.actor_name || "-"} / {tx.is_b_grade ? "B급" : "정상품"}</td>
@@ -3296,6 +3319,49 @@ export default function ManagementPage() {
               </button>
             </div>
           </section>
+          </div>
+        </div>
+      ) : null}
+
+      {partHistoryModalOpen && partHistoryPart ? (
+        <div className="scannerOverlay" role="dialog" aria-modal="true" aria-label="선택 품목 최근 이력">
+          <div className="scannerModal stockModal partHistoryModal">
+            <div className="adminHeaderRow" style={{ marginBottom: 12 }}>
+              <div>
+                <h2 style={{ margin: 0 }}>선택 품목 최근 이력</h2>
+                <div className="meta">{partHistoryPart.item_number} / {partHistoryPart.designation}</div>
+              </div>
+              <button className="btn secondary small" type="button" onClick={closePartHistory}>
+                닫기
+              </button>
+            </div>
+            <section className="quickStatsPanel" style={{ marginBottom: 12 }}>
+              <div className="quickStatCard">
+                <div className="meta">최근 입고 등록일</div>
+                <strong>{partHistoryItems.find((tx) => tx.tx_type === "IN")?.created_at ? formatDisplayDate(partHistoryItems.find((tx) => tx.tx_type === "IN")?.created_at) : "-"}</strong>
+              </div>
+              <div className="quickStatCard">
+                <div className="meta">최근 사용일</div>
+                <strong>{partHistoryItems.find((tx) => tx.tx_type === "OUT")?.created_at ? formatDisplayDate(partHistoryItems.find((tx) => tx.tx_type === "OUT")?.created_at) : "-"}</strong>
+              </div>
+            </section>
+            {partHistoryLoading ? (
+              <div className="panelNotice">최근 이력을 불러오는 중입니다.</div>
+            ) : (
+              <div className="historyMiniList">
+                {partHistoryItems.map((tx) => (
+                  <div key={tx.id} className="historyMiniItem">
+                    <div className="historyMiniHead">
+                      <span className={`txBadge ${tx.tx_type === "OUT" ? "out" : "in"}`}>{formatTxTypeLabel(tx.tx_type)}</span>
+                      <strong>{formatDisplayDate(tx.created_at)}</strong>
+                    </div>
+                    <div className="meta">{tx.actor_name || "기록자 없음"} · {tx.is_b_grade ? "B급" : "정상품"}</div>
+                    <div className="meta">{tx.memo || "메모 없음"}</div>
+                  </div>
+                ))}
+                {partHistoryItems.length === 0 ? <div className="panelNotice">이 품목의 최근 이력이 없습니다.</div> : null}
+              </div>
+            )}
           </div>
         </div>
       ) : null}
@@ -3398,7 +3464,7 @@ export default function ManagementPage() {
                     <div className="quickActionRow" style={{ marginTop: 10 }}>
                       <button className="btn small" type="button" onClick={() => handleSearchQuickAction(part, "IN")}>입고 담기</button>
                       <button className="btn danger small" type="button" onClick={() => handleSearchQuickAction(part, "OUT")}>사용 담기</button>
-                      <button className="btn secondary small" type="button" onClick={() => openPartHistory(part)}>입출고 이력</button>
+                      <button className="btn secondary small" type="button" onClick={() => void openPartHistory(part)}>최근 이력</button>
                     </div>
                     {isAdmin ? (
                       <div className="actions" style={{ marginTop: 10 }}>
@@ -3461,7 +3527,7 @@ export default function ManagementPage() {
                           <div className="actions">
                             <button className="btn small" type="button" onClick={() => handleSearchQuickAction(part, "IN")}>입고 담기</button>
                             <button className="btn danger small" type="button" onClick={() => handleSearchQuickAction(part, "OUT")}>사용 담기</button>
-                            <button className="btn secondary small" type="button" onClick={() => openPartHistory(part)}>입출고 이력</button>
+                            <button className="btn secondary small" type="button" onClick={() => void openPartHistory(part)}>최근 이력</button>
                           </div>
                         </td>
                         {isAdmin ? (
@@ -3534,7 +3600,7 @@ export default function ManagementPage() {
                       <div className="quickActionRow" style={{ marginTop: 10 }}>
                         <button className="btn small" type="button" onClick={() => handleSearchQuickAction(part, "IN")}>입고 담기</button>
                         <button className="btn danger small" type="button" onClick={() => handleSearchQuickAction(part, "OUT")}>사용 담기</button>
-                        <button className="btn secondary small" type="button" onClick={() => openPartHistory(part)}>입출고 이력</button>
+                        <button className="btn secondary small" type="button" onClick={() => void openPartHistory(part)}>최근 이력</button>
                       </div>
                     </article>
                   );
@@ -3575,7 +3641,7 @@ export default function ManagementPage() {
                             <div className="actions">
                               <button className="btn small" type="button" onClick={() => handleSearchQuickAction(part, "IN")}>입고 담기</button>
                               <button className="btn danger small" type="button" onClick={() => handleSearchQuickAction(part, "OUT")}>사용 담기</button>
-                              <button className="btn secondary small" type="button" onClick={() => openPartHistory(part)}>입출고 이력</button>
+                              <button className="btn secondary small" type="button" onClick={() => void openPartHistory(part)}>최근 이력</button>
                             </div>
                           </td>
                         </tr>

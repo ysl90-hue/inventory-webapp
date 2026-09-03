@@ -6,9 +6,20 @@ export type ReleaseNote = {
 };
 
 export const RELEASE_NOTES_FORCE_OPEN_KEY = "inventory_release_notes_force_open_version";
-export const APP_VERSION = "v2.0.0";
+export const APP_VERSION = "v2.1.0";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
+  {
+    version: "v2.1.0",
+    date: "2026-09-04",
+    summary: "이력 조회와 검색·팝업 사용성을 현장 작업 흐름에 맞게 다듬었습니다.",
+    items: [
+      "입고/사용 이력과 선택 품목 최근 이력을 분리하고, 선택 품목 이력은 별도 팝업에서 확인하도록 정리했습니다.",
+      "이력 날짜 필터를 한국시간 기준으로 보완하고, 최근 입고 등록일과 최근 사용일을 비교하기 쉽게 표시했습니다.",
+      "구분/위치 탐색에 초기화 버튼을 추가하고, 위치 검색은 필요할 때만 펼쳐 사용하도록 변경했습니다.",
+      "팝업 헤더와 닫기 버튼을 스크롤 중에도 계속 보이게 하고, 최근 상태에 마지막 수정자와 수정일시를 표시했습니다.",
+    ],
+  },
   {
     version: "v2.0.0",
     date: "2026-09-02",

@@ -3,6 +3,10 @@ import { supabaseRest, supabaseRestAsUser } from "@/lib/supabase/rest";
 
 export const runtime = "nodejs";
 
+function toKstIso(date: string, endOfDay = false) {
+  return new Date(`${date}T${endOfDay ? "23:59:59.999" : "00:00:00"}+09:00`).toISOString();
+}
+
 export async function GET(req: Request) {
   try {
     const authHeader = req.headers.get("authorization");
@@ -33,10 +37,10 @@ export async function GET(req: Request) {
       filters.push(`part_id=eq.${encodeURIComponent(partId)}`);
     }
     if (from) {
-      filters.push(`created_at=gte.${encodeURIComponent(`${from}T00:00:00`)}`);
+      filters.push(`created_at=gte.${encodeURIComponent(toKstIso(from))}`);
     }
     if (to) {
-      filters.push(`created_at=lte.${encodeURIComponent(`${to}T23:59:59.999`)}`);
+      filters.push(`created_at=lte.${encodeURIComponent(toKstIso(to, true))}`);
     }
     const filterQuery = filters.length > 0 ? `&${filters.join("&")}` : "";
 
